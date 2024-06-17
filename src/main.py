@@ -30,4 +30,9 @@ class Test(Resource):
 api.add_resource(Test, '/test')
 
 if __name__ == '__main__':
-    app.run(debug=True, host='127.0.0.1', port=int(os.environ.get('PORT', 8080)))
+    use_ssl = False  # Set this to True to enable SSL
+    if use_ssl:
+        ssl_context = ('/path/to/certificate.crt', '/path/to/private.key')
+        app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), ssl_context=ssl_context)
+    else:
+        app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
