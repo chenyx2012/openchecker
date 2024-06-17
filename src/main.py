@@ -29,7 +29,20 @@ class Test(Resource):
 
 api.add_resource(Test, '/test')
 
+
+def init():
+
+    # Do rabbitmq connection check.
+    from message_queue import read_config, test_rabbitmq_connection, create_queue
+
+    config = read_config('config/config.ini')
+    test_rabbitmq_connection(config)
+    create_queue(config, "opencheck")
+
+
 if __name__ == '__main__':
+    init()
+
     use_ssl = False  # Set this to True to enable SSL
     if use_ssl:
         ssl_context = ('/path/to/certificate.crt', '/path/to/private.key')
