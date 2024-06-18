@@ -66,7 +66,7 @@ def consumer(config, queue_name, callback_func):
         channel.start_consuming()
 
     except Exception as e:
-        print("Consumer connection failed as: {}".format(e))
+        print("Consumer failed as: {}".format(e))
         return str(e)
 
 if __name__ == "__main__":
