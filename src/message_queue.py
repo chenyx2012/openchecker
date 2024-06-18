@@ -54,6 +54,21 @@ def publish_message(config, queue_name, message_body):
         print("Publish message failed as: {}".format(e))
         return str(e)
 
+def consumer(config, queue_name, callback_func):
+    credentials = pika.PlainCredentials(config['username'], config['password'])
+    parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials)
+
+    try:
+        connection = pika.BlockingConnection(parameters)
+        channel = connection.channel()
+        channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=True)
+        print('Consumer connected, wating for messages...')
+        channel.start_consuming()
+
+    except Exception as e:
+        print("Consumer connection failed as: {}".format(e))
+        return str(e)
+
 if __name__ == "__main__":
     config = read_config('config/config.ini')
     test_rabbitmq_connection(config)
