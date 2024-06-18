@@ -5,6 +5,8 @@ from user_manager import authenticate, identity
 from token_operator import secret_key
 from datetime import timedelta
 import os
+from message_queue import read_config, test_rabbitmq_connection, create_queue, publish_message
+import json
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = secret_key
@@ -14,6 +16,8 @@ app.config['JWT_EXPIRATION_DELTA'] = timedelta(days=30)
 api = Api(app)
 
 jwt = JWT(app, authenticate, identity)
+
+config = read_config('config/config.ini')
 
 class Test(Resource):
     @jwt_required()
@@ -27,15 +31,29 @@ class Test(Resource):
 
         return "Message received: {}, test pass!".format(message)
 
+class OpenCheck(Resource):
+    @jwt_required()
+    def post(self):
+        payload = request.get_json()
+
+        #TODO  do request body check here.
+
+        message_body = {
+            "command": payload['command'],
+            "project_url": payload['project_url'],
+            "callback_url": payload['callback_url']
+        }
+
+        pub_res = publish_message(config, "opencheck", json.dumps(message_body))
+
+        return "Message received: {}, start check, the results would sent to callback_url you passed later.".format(message_body)
+
+
 api.add_resource(Test, '/test')
+api.add_resource(OpenCheck, '/opencheck')
 
 
 def init():
-
-    # Do rabbitmq connection check.
-    from message_queue import read_config, test_rabbitmq_connection, create_queue
-
-    config = read_config('config/config.ini')
     test_rabbitmq_connection(config)
     create_queue(config, "opencheck")
 

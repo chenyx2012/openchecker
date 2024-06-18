@@ -39,6 +39,21 @@ def create_queue(config, queue_name):
 
     connection.close()
 
+def publish_message(config, queue_name, message_body):
+    credentials = pika.PlainCredentials(config['username'], config['password'])
+    parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials)
+
+    try:
+        connection = pika.BlockingConnection(parameters)
+        channel = connection.channel()
+        channel.basic_publish(exchange='', routing_key=queue_name, body=message_body)
+        connection.close()
+        print(f"Publish message successed!")
+        return None
+    except Exception as e:
+        print("Publish message failed as: {}".format(e))
+        return str(e)
+
 if __name__ == "__main__":
     config = read_config('config/config.ini')
     test_rabbitmq_connection(config)
