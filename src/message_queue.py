@@ -61,7 +61,7 @@ def consumer(config, queue_name, callback_func):
     try:
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
-        channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=True)
+        channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=False)
         print('Consumer connected, wating for messages...')
         channel.start_consuming()
 

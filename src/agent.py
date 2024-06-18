@@ -4,7 +4,6 @@ import json
 
 def callback_func(ch, method, properties, body):
     message = json.loads(body.decode('utf-8'))
-    print(message)
     command = message.get('command')
     project_url = message.get('project_url')
     callback_url = message.get('callback_url')
@@ -49,6 +48,8 @@ def callback_func(ch, method, properties, body):
             print("scancode job failed: {}, error: {}".format(project_url, error))
     else:
         print(f"Unknown command: {command}")
+
+    ch.basic_ack(delivery_tag=method.delivery_tag)
 
 if __name__ == "__main__":
     config = read_config('config/config.ini')
