@@ -39,7 +39,7 @@ class OpenCheck(Resource):
         #TODO  do request body check here.
 
         message_body = {
-            "command": payload['command'],
+            "command_list": payload['commands'],
             "project_url": payload['project_url'],
             "callback_url": payload['callback_url']
         }
