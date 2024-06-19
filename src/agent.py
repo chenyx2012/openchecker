@@ -2,6 +2,16 @@ import subprocess
 from message_queue import read_config, consumer
 import json
 
+def shell_exec(shell_script):
+    process = subprocess.Popen([shell_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    shell_output, error = process.communicate()
+
+    if process.returncode == 0:
+        output = json.loads(shell_output.decode("utf-8"))
+        return output, None
+    else:
+        return output, error
+
 def callback_func(ch, method, properties, body):
     message = json.loads(body.decode('utf-8'))
     command = message.get('command')
@@ -17,13 +27,11 @@ def callback_func(ch, method, properties, body):
             rm -rf $project_name > /dev/null
         """
 
-        process = subprocess.Popen([shell_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        output, error = process.communicate()
+        result, error = shell_exec(shell_script)
 
-        if process.returncode == 0:
+        if error == None:
             print("osv-scanner job done: {}".format(project_url))
-            scan_result = json.loads(output.decode("utf-8"))
-            print(scan_result)
+            print(result)
         else:
             print("osv-scanner job failed: {}, error: {}".format(project_url, error))
 
@@ -37,13 +45,11 @@ def callback_func(ch, method, properties, body):
             rm -rf $project_name scan_result.json > /dev/null
         """
 
-        process = subprocess.Popen([shell_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-        output, error = process.communicate()
+        result, error = shell_exec(shell_script)
 
-        if process.returncode == 0:
+        if error == None:
             print("scancode job done: {}".format(project_url))
-            scan_result = json.loads(output.decode("utf-8"))
-            print(scan_result)
+            print(result)
         else:
             print("scancode job failed: {}, error: {}".format(project_url, error))
     else:
