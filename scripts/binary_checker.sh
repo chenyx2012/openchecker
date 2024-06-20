@@ -17,7 +17,7 @@ check_compressed_binary() {
     for local_file in $(find $temp_dir -type f -not -path '*/.git/*')
     do
         if is_binary "$local_file"; then
-            echo "Binary file found in $1: $(echo $local_file | cut -d'/' -f4-)"
+            # echo "Binary file found in $1: $(echo $local_file | cut -d'/' -f4-)"
             flag=0
         fi
     done
