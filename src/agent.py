@@ -17,6 +17,7 @@ def callback_func(ch, method, properties, body):
     command_list = message.get('command_list')
     project_url = message.get('project_url')
     callback_url = message.get('callback_url')
+    task_metadata = message.get('task_metadata')
 
     for command in command_list:
         if command == 'osv-scanner':

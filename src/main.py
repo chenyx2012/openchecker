@@ -41,7 +41,8 @@ class OpenCheck(Resource):
         message_body = {
             "command_list": payload['commands'],
             "project_url": payload['project_url'],
-            "callback_url": payload['callback_url']
+            "callback_url": payload['callback_url'],
+            "task_metadata": payload['task_metadata']
         }
 
         pub_res = publish_message(config, "opencheck", json.dumps(message_body))
