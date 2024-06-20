@@ -65,6 +65,33 @@ def callback_func(ch, method, properties, body):
                 print(result)
             else:
                 print("binary-checker job failed: {}, error: {}".format(project_url, error))
+
+        elif command == 'signature-checker':
+
+            shell_script=f"""
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                git clone {project_url} > /dev/null
+                find "$project_name" -type f \( -name "*.asc" -o -name "*.sig" -o -name "*.cer" -o -name "*.crt" -o -name "*.pem" -o -name "*.sha256" -o -name "*.sha512" \) -print
+                rm -rf $project_name scan_result.json > /dev/null
+            """
+
+            result, error = shell_exec(shell_script)
+
+            if error == None:
+                print("signature-checker job done: {}".format(project_url))
+                print(result)
+            else:
+                print("gignature-checker job failed: {}, error: {}".format(project_url, error))
+
+        elif command == 'url-checker':
+            from urllib import request
+            try:
+                with request.urlopen(project_url) as file:
+                    print(file.status)
+                    print(file.reason)
+            except Exception as e:
+                print(f"{e}")
+
         else:
             print(f"Unknown command: {command}")
 
