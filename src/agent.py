@@ -2,15 +2,17 @@ import subprocess
 from message_queue import read_config, consumer
 import json
 
-def shell_exec(shell_script):
-    process = subprocess.Popen([shell_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+def shell_exec(shell_script, param=None):
+    if param != None:
+        process = subprocess.Popen(["/bin/bash", "-c", shell_script + " " + param], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+    else:
+        process = subprocess.Popen([shell_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
     shell_output, error = process.communicate()
 
     if process.returncode == 0:
-        output = json.loads(shell_output.decode("utf-8"))
-        return output, None
+        return shell_output, None
     else:
-        return output, error
+        return None, error
 
 def callback_func(ch, method, properties, body):
     message = json.loads(body.decode('utf-8'))
@@ -54,6 +56,15 @@ def callback_func(ch, method, properties, body):
                 print(result)
             else:
                 print("scancode job failed: {}, error: {}".format(project_url, error))
+
+        elif command == 'binary-checker':
+            result, error = shell_exec("./scripts/binary_checker.sh", project_url)
+
+            if error == None:
+                print("binary-checker job done: {}".format(project_url))
+                print(result)
+            else:
+                print("binary-checker job failed: {}, error: {}".format(project_url, error))
         else:
             print(f"Unknown command: {command}")
 
