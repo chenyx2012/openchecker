@@ -35,7 +35,7 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("osv-scanner job done: {}".format(project_url))
-                print(result)
+                osv_result = json.loads(result.decode('utf-8'))
             else:
                 print("osv-scanner job failed: {}, error: {}".format(project_url, error))
 
@@ -53,7 +53,7 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("scancode job done: {}".format(project_url))
-                print(result)
+                scancode_result = json.loads(result.decode('utf-8'))
             else:
                 print("scancode job failed: {}, error: {}".format(project_url, error))
 
@@ -62,7 +62,19 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("binary-checker job done: {}".format(project_url))
-                print(result)
+                result = result.decode('utf-8') if result != None else ""
+                data_list = result.split('\n')
+                binary_file_list = []
+                binary_archive_list = []
+                for data in data_list[:-1]:
+                    if "Binary file found:" in data:
+                        binary_file_list.append(data.split(": ")[1])
+                    elif "Binary archive found:" in data:
+                        binary_archive_list.append(data.split(": ")[1])
+                    else:
+                        pass
+                binary_result = {"binary_file_list": binary_file_list, "binary_archive_list": binary_archive_list, "error": "null"}
+
             else:
                 print("binary-checker job failed: {}, error: {}".format(project_url, error))
 
@@ -79,7 +91,9 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("signature-checker job done: {}".format(project_url))
-                print(result)
+                result = result.decode('utf-8') if result != None else ""
+                data_list = result.split('\n')
+                signature_result = {"signature_file_list": data_list[:-1], "error": "null"}
             else:
                 print("gignature-checker job failed: {}, error: {}".format(project_url, error))
 
@@ -87,10 +101,15 @@ def callback_func(ch, method, properties, body):
             from urllib import request
             try:
                 with request.urlopen(project_url) as file:
-                    print(file.status)
-                    print(file.reason)
+                    if file.status == 200 and file.reason == "OK":
+                        print("url-checker job done: {}".format(project_url))
+                        url_result = {"url": project_url, "status": "pass", "error": "null"}
+                    else:
+                        print("url-checker job failed: {}".format(project_url))
+                        url_result = {"url": project_url, "status": "fail", "error": file.reason}
             except Exception as e:
-                print(f"{e}")
+                print("gignature-checker job failed: {}, error: {}".format(project_url, e))
+                url_result = {"url": project_url, "status": "fail", "error": e}
 
         else:
             print(f"Unknown command: {command}")
