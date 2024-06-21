@@ -14,6 +14,18 @@ def shell_exec(shell_script, param=None):
     else:
         return None, error
 
+def request_url (url, payload):
+    import requests
+    response = requests.post(url, json=payload)
+
+    if response.status_code == 200:
+        print("Request sent successfully.")
+        return response.text
+    else:
+        print(f"Failed to send request. Status code: {response.status_code}")
+        return None
+
+
 def callback_func(ch, method, properties, body):
     message = json.loads(body.decode('utf-8'))
     command_list = message.get('command_list')
@@ -130,6 +142,10 @@ def callback_func(ch, method, properties, body):
 
         else:
             print(f"Unknown command: {command}")
+
+    if callback_url != None and callback_url != "":
+        response = request_url(callback_url, res_payload)
+        print(f"Callback response: {response}")
 
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
