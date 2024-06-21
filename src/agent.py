@@ -44,10 +44,10 @@ def callback_func(ch, method, properties, body):
             if error == None:
                 print("osv-scanner job done: {}".format(project_url))
                 osv_result = json.loads(result.decode('utf-8'))
-                res_payload["scan_results"]["osv_result"] = osv_result
+                res_payload["scan_results"]["osv-scanner"] = osv_result
             else:
                 print("osv-scanner job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["osv_result"] = {"error": error}
+                res_payload["scan_results"]["osv-scanner"] = {"error": error}
 
         elif command == 'scancode':
 
@@ -64,10 +64,10 @@ def callback_func(ch, method, properties, body):
             if error == None:
                 print("scancode job done: {}".format(project_url))
                 scancode_result = json.loads(result.decode('utf-8'))
-                res_payload["scan_results"]["scancode_result"] = scancode_result
+                res_payload["scan_results"]["scancode"] = scancode_result
             else:
                 print("scancode job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["scancode_result"] = {"error": error}
+                res_payload["scan_results"]["scancode"] = {"error": error}
 
         elif command == 'binary-checker':
             result, error = shell_exec("./scripts/binary_checker.sh", project_url)
@@ -86,11 +86,11 @@ def callback_func(ch, method, properties, body):
                     else:
                         pass
                 binary_result = {"binary_file_list": binary_file_list, "binary_archive_list": binary_archive_list}
-                res_payload["scan_results"]["binary_result"] = binary_result
+                res_payload["scan_results"]["binary-checker"] = binary_result
 
             else:
                 print("binary-checker job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["binary_result"] = {"error": error}
+                res_payload["scan_results"]["binary-checker"] = {"error": error}
 
         elif command == 'signature-checker':
 
@@ -108,10 +108,10 @@ def callback_func(ch, method, properties, body):
                 result = result.decode('utf-8') if result != None else ""
                 data_list = result.split('\n')
                 signature_result = {"signature_file_list": data_list[:-1]}
-                res_payload ["scan_results"]["signature_result"] = signature_result
+                res_payload["scan_results"]["signature-checker"] = signature_result
             else:
                 print("gignature-checker job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["signature_result"] = {"error": error}
+                res_payload["scan_results"]["signature-checker"] = {"error": error}
 
         elif command == 'url-checker':
             from urllib import request
@@ -126,7 +126,7 @@ def callback_func(ch, method, properties, body):
             except Exception as e:
                 print("gignature-checker job failed: {}, error: {}".format(project_url, e))
                 url_result = {"error": e}
-            res_payload["scan_results"]["url_result"] = url_result
+            res_payload["scan_results"]["url-checker"] = url_result
 
         else:
             print(f"Unknown command: {command}")
