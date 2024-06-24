@@ -2,6 +2,8 @@ import subprocess
 from message_queue import consumer
 from helper import read_config
 import json
+import requests
+import re
 
 config = read_config('config/config.ini')
 
@@ -18,7 +20,6 @@ def shell_exec(shell_script, param=None):
         return None, error
 
 def request_url (url, payload):
-    import requests
     response = requests.post(url, json=payload)
 
     if response.status_code == 200:
@@ -143,14 +144,76 @@ def callback_func(ch, method, properties, body):
                 url_result = {"error": e}
             res_payload["scan_results"]["url-checker"] = url_result
 
+        elif command == 'sonar-scanner':
+
+            pattern = r'https?://(?:www\.)?(github\.com|gitee\.com)/([^/]+)/([^/]+)\.git'
+            match = re.match(pattern, project_url)
+            if match:
+                platform, organization, project = match.groups()
+            else:
+                platform, organization, project = "other", "default", "default"
+            sonar_project_name = platform + "_" + organization + "_" + project
+
+            sonar_config = config["SonarQube"]
+
+            sonar_search_procet_api = f"http://{sonar_config['host']}:{sonar_config['port']}/api/projects/search"
+
+            data = {"projects": sonar_project_name}
+            auth = (sonar_config["username"], sonar_config["password"])
+            is_exit = False
+
+            try:
+                response = requests.get(sonar_search_procet_api, auth=auth, params={"projects": sonar_project_name})
+                if response.status_code == 200:
+                    print("Call sonarqube projects search api success: 200")
+                    res = json.loads(response.text)
+                    is_exit = True if res["paging"]["total"] > 0 else False
+                else:
+                    print(f"Call sonarqube projects search api failed with status code: {response.status_code}")
+            except requests.exceptions.RequestException as e:
+                print(f"Call sonarqube projects search api failed with error: {e}")
+
+            if not is_exit:
+                sonar_create_procet_api = f"http://{sonar_config['host']}:{sonar_config['port']}/api/projects/create"
+                data = {"project": sonar_project_name, "name": sonar_project_name}
+
+                try:
+                    response = requests.post(sonar_create_procet_api, auth=auth, data=data)
+                    if response.status_code == 200:
+                        print("Call sonarqube projects create api success: 200")
+                    else:
+                        print(f"Call sonarqube projects create api failed with status code: {response.status_code}")
+                except requests.exceptions.RequestException as e:
+                    print(f"Call sonarqube projects create api failed with error: {e}")
+
+            shell_script=f"""
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                git clone {project_url} > /dev/null
+                sonar-scanner \
+                    -Dsonar.projectKey={sonar_project_name} \
+                    -Dsonar.sources=$project_name \
+                    -Dsonar.host.url=http://{sonar_config['host']}:{sonar_config['port']} \
+                    -Dsonar.token={sonar_config['token']} \
+                    -Dsonar.exclusions=**/*.java
+                rm -rf $project_name scan_result.json > /dev/null
+            """
+
+            result, error = shell_exec(shell_script)
+
+            if error == None:
+                print("sonar-scanner job done: {}".format(project_url))
+                result = result.decode('utf-8') if result != None else ""
+            else:
+                print("sonar-scanner job failed: {}, error: {}".format(project_url, error))
+
         else:
             print(f"Unknown command: {command}")
 
-    if callback_url != None and callback_url != "":
-        response = request_url(callback_url, res_payload)
-        print(f"Callback response: {response}")
+    # if callback_url != None and callback_url != "":
+    #     response = request_url(callback_url, res_payload)
+    #     print(f"Callback response: {response}")
 
-    ch.basic_ack(delivery_tag=method.delivery_tag)
+    # ch.basic_ack(delivery_tag=method.delivery_tag)
 
 if __name__ == "__main__":
     consumer(config["RabbitMQ"], "opencheck", callback_func)
