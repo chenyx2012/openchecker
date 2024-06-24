@@ -209,11 +209,11 @@ def callback_func(ch, method, properties, body):
         else:
             print(f"Unknown command: {command}")
 
-    # if callback_url != None and callback_url != "":
-    #     response = request_url(callback_url, res_payload)
-    #     print(f"Callback response: {response}")
+    if callback_url != None and callback_url != "":
+        response = request_url(callback_url, res_payload)
+        print(f"Callback response: {response}")
 
-    # ch.basic_ack(delivery_tag=method.delivery_tag)
+    ch.basic_ack(delivery_tag=method.delivery_tag)
 
 if __name__ == "__main__":
     consumer(config["RabbitMQ"], "opencheck", callback_func)
