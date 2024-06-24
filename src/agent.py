@@ -1,6 +1,9 @@
 import subprocess
-from message_queue import read_config, consumer
+from message_queue import consumer
+from helper import read_config
 import json
+
+config = read_config('config/config.ini')
 
 def shell_exec(shell_script, param=None):
     if param != None:
@@ -150,6 +153,5 @@ def callback_func(ch, method, properties, body):
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 if __name__ == "__main__":
-    config = read_config('config/config.ini')
-    consumer(config, "opencheck", callback_func)
+    consumer(config["RabbitMQ"], "opencheck", callback_func)
     print('Agents are serving. To exit press CTRL+C')

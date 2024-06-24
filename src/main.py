@@ -5,7 +5,8 @@ from user_manager import authenticate, identity
 from token_operator import secret_key
 from datetime import timedelta
 import os
-from message_queue import read_config, test_rabbitmq_connection, create_queue, publish_message
+from message_queue import test_rabbitmq_connection, create_queue, publish_message
+from helper import read_config
 import json
 
 app = Flask(__name__)
@@ -17,7 +18,7 @@ api = Api(app)
 
 jwt = JWT(app, authenticate, identity)
 
-config = read_config('config/config.ini')
+config = read_config('config/config.ini', "RabbitMQ")
 
 class Test(Resource):
     @jwt_required()

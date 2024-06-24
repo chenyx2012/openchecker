@@ -1,10 +1,5 @@
-import configparser
 import pika
-
-def read_config(filename):
-    config = configparser.ConfigParser()
-    config.read(filename)
-    return config['RabbitMQ']
+from helper import read_config
 
 def test_rabbitmq_connection(config):
     credentials = pika.PlainCredentials(config['username'], config['password'])
@@ -70,5 +65,5 @@ def consumer(config, queue_name, callback_func):
         return str(e)
 
 if __name__ == "__main__":
-    config = read_config('config/config.ini')
+    config = read_config('config/config.ini', "RabbitMQ")
     test_rabbitmq_connection(config)
