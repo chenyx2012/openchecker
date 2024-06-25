@@ -4,6 +4,7 @@ from helper import read_config
 import json
 import requests
 import re
+import time
 
 config = read_config('config/config.ini')
 
@@ -188,7 +189,7 @@ def callback_func(ch, method, properties, body):
 
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-                git clone {project_url} > /dev/null
+                cd ~ && git clone {project_url} > /dev/null
                 sonar-scanner \
                     -Dsonar.projectKey={sonar_project_name} \
                     -Dsonar.sources=$project_name \
@@ -201,8 +202,25 @@ def callback_func(ch, method, properties, body):
             result, error = shell_exec(shell_script)
 
             if error == None:
+                print("sonar-scanner finish scanning project: {}, report querying...".format(project_url))
+
+                sonar_query_measures_api = f"http://{sonar_config['host']}:{sonar_config['port']}/api/measures/component"
+
+                try:
+                    # TODO: optimize this, waiting for sonarqube data processing
+                    time.sleep(60)
+                    response = requests.get(sonar_query_measures_api, auth=auth, params={"component": sonar_project_name, "metricKeys": "coverage,complexity,duplicated_lines_density"})
+                    if response.status_code == 200:
+                        print("Querying sonar-scanner report success: 200")
+                        sonar_result = json.loads(response.text)
+                        res_payload["scan_results"]["sonar-scanner"] = sonar_result
+                        print(res_payload)
+                    else:
+                        print(f"Querying sonar-scanner report failed with status code: {response.status_code}")
+                except requests.exceptions.RequestException as e:
+                    print(f"Querying sonar-scanner report failed with error: {e}")
+
                 print("sonar-scanner job done: {}".format(project_url))
-                result = result.decode('utf-8') if result != None else ""
             else:
                 print("sonar-scanner job failed: {}, error: {}".format(project_url, error))
 
