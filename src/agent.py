@@ -114,7 +114,7 @@ def callback_func(ch, method, properties, body):
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 git clone {project_url} > /dev/null
                 find "$project_name" -type f \( -name "*.asc" -o -name "*.sig" -o -name "*.cer" -o -name "*.crt" -o -name "*.pem" -o -name "*.sha256" -o -name "*.sha512" \) -print
-                rm -rf $project_name scan_result.json > /dev/null
+                rm -rf $project_name > /dev/null
             """
 
             result, error = shell_exec(shell_script)
@@ -195,7 +195,7 @@ def callback_func(ch, method, properties, body):
                     -Dsonar.host.url=http://{sonar_config['host']}:{sonar_config['port']} \
                     -Dsonar.token={sonar_config['token']} \
                     -Dsonar.exclusions=**/*.java
-                rm -rf $project_name scan_result.json > /dev/null
+                rm -rf $project_name > /dev/null
             """
 
             result, error = shell_exec(shell_script)
