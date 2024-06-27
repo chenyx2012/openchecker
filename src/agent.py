@@ -1,6 +1,7 @@
 import subprocess
 from message_queue import consumer
 from helper import read_config
+from datetime import datetime
 import json
 import requests
 import re
@@ -32,6 +33,7 @@ def request_url (url, payload):
 
 
 def callback_func(ch, method, properties, body):
+    print(f"callback func called at {datetime.now()}")
     message = json.loads(body.decode('utf-8'))
     command_list = message.get('command_list')
     project_url = message.get('project_url')
