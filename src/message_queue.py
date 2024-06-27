@@ -51,7 +51,7 @@ def publish_message(config, queue_name, message_body):
 
 def consumer(config, queue_name, callback_func):
     credentials = pika.PlainCredentials(config['username'], config['password'])
-    parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials)
+    parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials, heartbeat=600)
 
     try:
         connection = pika.BlockingConnection(parameters)
