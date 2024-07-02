@@ -226,6 +226,25 @@ def callback_func(ch, method, properties, body):
             else:
                 print("sonar-scanner job failed: {}, error: {}".format(project_url, error))
 
+        elif command == 'dependency-checker':
+
+            shell_script=f"""
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                git clone {project_url} > /dev/null
+                ort analyze -i $project_name -o $project_name -f JSON > /dev/null
+                cat $project_name/analyzer-result.json
+                rm -rf $project_name > /dev/null
+            """
+            result, error = shell_exec(shell_script, project_url)
+
+            if error == None:
+                print("dependency-checker job done: {}".format(project_url))
+                result = json.loads(result.decode('utf-8')) if result != None else ""
+                res_payload["scan_results"]["dependency-checker"] = result
+            else:
+                print("dependency-checker job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["dependency-checker"] = {"error": error}
+
         else:
             print(f"Unknown command: {command}")
 
