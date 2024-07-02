@@ -211,7 +211,7 @@ def callback_func(ch, method, properties, body):
                 try:
                     # TODO: optimize this, waiting for sonarqube data processing
                     time.sleep(60)
-                    response = requests.get(sonar_query_measures_api, auth=auth, params={"component": sonar_project_name, "metricKeys": "coverage,complexity,duplicated_lines_density"})
+                    response = requests.get(sonar_query_measures_api, auth=auth, params={"component": sonar_project_name, "metricKeys": "coverage,complexity,duplicated_lines_density,lines"})
                     if response.status_code == 200:
                         print("Querying sonar-scanner report success: 200")
                         sonar_result = json.loads(response.text)
