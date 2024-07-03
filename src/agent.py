@@ -9,6 +9,29 @@ import time
 
 config = read_config('config/config.ini')
 
+def dependency_checker_output_process(output):
+    if output == None:
+        return ""
+
+    result = json.loads(output.decode('utf-8'))
+    try:
+        packages = result["analyzer"]["result"]["packages"]
+        result = {"packages_all": [], "packages_with_license_detect": [], "packages_without_license_detect": []}
+
+        for package in packages:
+            result["packages_all"].append(package["purl"])
+            license = package["declared_licenses"]
+            if license != None and len(license) > 0:
+                result["packages_with_license_detect"].append(package["purl"])
+            else:
+                result["packages_without_license_detect"].append(package["purl"])
+
+    except Exception as e:
+        print(f"Error processing dependency-checker output: {e}")
+        return ""
+
+    return result
+
 def shell_exec(shell_script, param=None):
     if param != None:
         process = subprocess.Popen(["/bin/bash", "-c", shell_script + " " + param], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
@@ -239,9 +262,7 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("dependency-checker job done: {}".format(project_url))
-                result = json.loads(result.decode('utf-8')) if result != None else ""
-                res_payload["scan_results"]["dependency-checker"] = result
-                print(result)
+                res_payload["scan_results"]["dependency-checker"] = dependency_checker_output_process(result)
             else:
                 print("dependency-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["dependency-checker"] = {"error": json.dumps(error.decode("utf-8"))}
