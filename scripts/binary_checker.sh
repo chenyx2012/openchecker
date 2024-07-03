@@ -22,7 +22,7 @@ check_compressed_binary() {
         fi
     done
 
-    rm -r "$temp_dir"
+    rm -rf "$temp_dir"
     return $flag
 }
 
@@ -30,8 +30,12 @@ check_compressed_binary() {
 project_name=$(basename $1 | sed 's/\.git$//') > /dev/null
 git clone $1 > /dev/null 2>&1
 
-for file in $(find $project_name -type f -not -path '*/.git/*')
+for file in $(find $project_name -type f -not -path '*/.git/*' -not -path '*/test/*')
 do
+    if [ ! -e "$file" ]; then
+        continue
+    fi
+
     if [[ $(file --mime-type -b "$file") == application/zip || $(file --mime-type -b "$file") == application/x-tar ]]; then
         if check_compressed_binary "$file"; then
             echo "Binary archive found: $file"
