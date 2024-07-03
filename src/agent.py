@@ -66,7 +66,7 @@ def callback_func(ch, method, properties, body):
                 res_payload["scan_results"]["osv-scanner"] = osv_result
             else:
                 print("osv-scanner job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["osv-scanner"] = {"error": error}
+                res_payload["scan_results"]["osv-scanner"] = {"error": json.dumps(error.decode("utf-8"))}
 
         elif command == 'scancode':
 
@@ -86,7 +86,7 @@ def callback_func(ch, method, properties, body):
                 res_payload["scan_results"]["scancode"] = scancode_result
             else:
                 print("scancode job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["scancode"] = {"error": error}
+                res_payload["scan_results"]["scancode"] = {"error": json.dumps(error.decode("utf-8"))}
 
         elif command == 'binary-checker':
             result, error = shell_exec("./scripts/binary_checker.sh", project_url)
@@ -109,7 +109,7 @@ def callback_func(ch, method, properties, body):
 
             else:
                 print("binary-checker job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["binary-checker"] = {"error": error}
+                res_payload["scan_results"]["binary-checker"] = {"error": json.dumps(error.decode("utf-8"))}
 
         elif command == 'signature-checker':
 
@@ -130,7 +130,7 @@ def callback_func(ch, method, properties, body):
                 res_payload["scan_results"]["signature-checker"] = signature_result
             else:
                 print("gignature-checker job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["signature-checker"] = {"error": error}
+                res_payload["scan_results"]["signature-checker"] = {"error": json.dumps(error.decode("utf-8"))}
 
         elif command == 'url-checker':
             from urllib import request
@@ -241,9 +241,10 @@ def callback_func(ch, method, properties, body):
                 print("dependency-checker job done: {}".format(project_url))
                 result = json.loads(result.decode('utf-8')) if result != None else ""
                 res_payload["scan_results"]["dependency-checker"] = result
+                print(result)
             else:
                 print("dependency-checker job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["dependency-checker"] = {"error": error}
+                res_payload["scan_results"]["dependency-checker"] = {"error": json.dumps(error.decode("utf-8"))}
 
         else:
             print(f"Unknown command: {command}")
