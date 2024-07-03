@@ -239,7 +239,6 @@ def callback_func(ch, method, properties, body):
                         print("Querying sonar-scanner report success: 200")
                         sonar_result = json.loads(response.text)
                         res_payload["scan_results"]["sonar-scanner"] = sonar_result
-                        print(res_payload)
                     else:
                         print(f"Querying sonar-scanner report failed with status code: {response.status_code}")
                 except requests.exceptions.RequestException as e:
