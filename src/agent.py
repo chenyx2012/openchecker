@@ -235,7 +235,7 @@ def callback_func(ch, method, properties, body):
                 cat $project_name/analyzer-result.json
                 rm -rf $project_name > /dev/null
             """
-            result, error = shell_exec(shell_script, project_url)
+            result, error = shell_exec(shell_script)
 
             if error == None:
                 print("dependency-checker job done: {}".format(project_url))
