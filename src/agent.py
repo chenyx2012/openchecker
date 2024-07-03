@@ -85,7 +85,7 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("osv-scanner job done: {}".format(project_url))
-                osv_result = json.loads(result.decode('utf-8'))
+                osv_result = json.loads(result.decode('utf-8')) if result != None else ""
                 res_payload["scan_results"]["osv-scanner"] = osv_result
             else:
                 print("osv-scanner job failed: {}, error: {}".format(project_url, error))
@@ -105,7 +105,7 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("scancode job done: {}".format(project_url))
-                scancode_result = json.loads(result.decode('utf-8'))
+                scancode_result = json.loads(result.decode('utf-8')) if result != None else ""
                 res_payload["scan_results"]["scancode"] = scancode_result
             else:
                 print("scancode job failed: {}, error: {}".format(project_url, error))
