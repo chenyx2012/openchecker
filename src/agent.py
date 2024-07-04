@@ -286,4 +286,4 @@ def callback_func(ch, method, properties, body):
 
 if __name__ == "__main__":
     consumer(config["RabbitMQ"], "opencheck", callback_func)
-    print('Agents are serving. To exit press CTRL+C')
+    print('Agents server ended.')
