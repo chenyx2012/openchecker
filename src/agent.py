@@ -47,7 +47,7 @@ def shell_exec(shell_script, param=None):
         return None, error
 
 def request_url (url, payload):
-    response = post_with_backoff(url, json=payload)
+    response = post_with_backoff(url=url, json=payload)
 
     if response.status_code == 200:
         print("Request sent successfully.")
