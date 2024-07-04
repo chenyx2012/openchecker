@@ -10,6 +10,7 @@ import time
 config = read_config('config/config.ini')
 
 def dependency_checker_output_process(output):
+    return {"packages_all": [], "packages_with_license_detect": [], "packages_without_license_detect": []}
     if output == None:
         return ""
 
@@ -76,9 +77,11 @@ def callback_func(ch, method, properties, body):
 
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-                git clone {project_url} > /dev/null
+                if [ ! -e "$project_name" ]; then
+                    git clone {project_url} > /dev/null
+                fi
                 osv-scanner --format json -r $project_name
-                rm -rf $project_name > /dev/null
+                # rm -rf $project_name > /dev/null
             """
 
             result, error = shell_exec(shell_script)
@@ -95,10 +98,12 @@ def callback_func(ch, method, properties, body):
 
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-                git clone {project_url} > /dev/null
+                if [ ! -e "$project_name" ]; then
+                    git clone {project_url} > /dev/null
+                fi
                 scancode -lc --json-pp scan_result.json $project_name --unknown-licenses -n 4 > /dev/null
                 cat scan_result.json
-                rm -rf $project_name scan_result.json > /dev/null
+                # rm -rf $project_name scan_result.json > /dev/null
             """
 
             result, error = shell_exec(shell_script)
@@ -138,9 +143,11 @@ def callback_func(ch, method, properties, body):
 
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-                git clone {project_url} > /dev/null
+                if [ ! -e "$project_name" ]; then
+                    git clone {project_url} > /dev/null
+                fi
                 find "$project_name" -type f \( -name "*.asc" -o -name "*.sig" -o -name "*.cer" -o -name "*.crt" -o -name "*.pem" -o -name "*.sha256" -o -name "*.sha512" \) -print
-                rm -rf $project_name > /dev/null
+                # rm -rf $project_name > /dev/null
             """
 
             result, error = shell_exec(shell_script)
@@ -252,8 +259,10 @@ def callback_func(ch, method, properties, body):
 
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-                git clone {project_url} > /dev/null
-                ort analyze -i $project_name -o $project_name -f JSON > /dev/null
+                if [ ! -e "$project_name" ]; then
+                    git clone {project_url} > /dev/null
+                fi
+                # ort analyze -i $project_name -o $project_name -f JSON > /dev/null
                 cat $project_name/analyzer-result.json
                 rm -rf $project_name > /dev/null
             """
