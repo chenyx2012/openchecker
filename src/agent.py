@@ -2,6 +2,7 @@ import subprocess
 from message_queue import consumer
 from helper import read_config
 from datetime import datetime
+from exponential_backoff import post_with_backoff
 import json
 import requests
 import re
@@ -46,7 +47,7 @@ def shell_exec(shell_script, param=None):
         return None, error
 
 def request_url (url, payload):
-    response = requests.post(url, json=payload)
+    response = post_with_backoff(url, json=payload)
 
     if response.status_code == 200:
         print("Request sent successfully.")
