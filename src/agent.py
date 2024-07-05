@@ -102,13 +102,11 @@ def callback_func(ch, method, properties, body):
 
             result, error = shell_exec(shell_script)
 
-            if error == None:
-                print("osv-scanner job done: {}".format(project_url))
-                osv_result = json.loads(result.decode('utf-8')) if result != None else ""
-                res_payload["scan_results"]["osv-scanner"] = osv_result
-            else:
-                print("osv-scanner job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["osv-scanner"] = {"error": json.dumps(error.decode("utf-8"))}
+            # When osv-scanner tool specify the '--format json' option, only the scan results are output to the standard output.
+            # All other information is redirected to the standard error output;
+            # Hence, error values are not checked here.
+            osv_result = json.loads(result.decode('utf-8')) if result != None else ""
+            res_payload["scan_results"]["osv-scanner"] = osv_result
 
         elif command == 'scancode':
 
