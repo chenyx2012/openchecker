@@ -13,7 +13,7 @@ config = read_config('config/config.ini')
 def dependency_checker_output_process(output):
     return {"packages_all": [], "packages_with_license_detect": [], "packages_without_license_detect": []}
     if not bool(output):
-        return ""
+        return {}
 
     result = json.loads(output.decode('utf-8'))
     try:
@@ -30,7 +30,7 @@ def dependency_checker_output_process(output):
 
     except Exception as e:
         print(f"Error processing dependency-checker output: {e}")
-        return ""
+        return {}
 
     return result
 
@@ -106,7 +106,7 @@ def callback_func(ch, method, properties, body):
             # All other information is redirected to the standard error output;
             # Hence, error values are not checked here.
             print("osv-scanner job done: {}".format(project_url))
-            osv_result = json.loads(result.decode('utf-8')) if bool(result) else ""
+            osv_result = json.loads(result.decode('utf-8')) if bool(result) else {}
             res_payload["scan_results"]["osv-scanner"] = osv_result
 
         elif command == 'scancode':
@@ -126,7 +126,7 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("scancode job done: {}".format(project_url))
-                scancode_result = json.loads(result.decode('utf-8')) if bool(result) else ""
+                scancode_result = json.loads(result.decode('utf-8')) if bool(result) else {}
                 res_payload["scan_results"]["scancode"] = scancode_result
             else:
                 print("scancode job failed: {}, error: {}".format(project_url, error))
@@ -137,7 +137,7 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("binary-checker job done: {}".format(project_url))
-                result = result.decode('utf-8') if bool(result) else ""
+                result = result.decode('utf-8') if bool(result) else {}
                 data_list = result.split('\n')
                 binary_file_list = []
                 binary_archive_list = []
@@ -170,7 +170,7 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("signature-checker job done: {}".format(project_url))
-                result = result.decode('utf-8') if bool(result) else ""
+                result = result.decode('utf-8') if bool(result) else {}
                 data_list = result.split('\n')
                 signature_result = {"signature_file_list": data_list[:-1]}
                 res_payload["scan_results"]["signature-checker"] = signature_result
