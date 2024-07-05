@@ -11,7 +11,6 @@ import time
 config = read_config('config/config.ini')
 
 def dependency_checker_output_process(output):
-    return {"packages_all": [], "packages_with_license_detect": [], "packages_without_license_detect": []}
     if not bool(output):
         return {}
 
@@ -281,8 +280,8 @@ def callback_func(ch, method, properties, body):
                 if [ ! -e "$project_name" ]; then
                     git clone {project_url} > /dev/null
                 fi
-                # ort analyze -i $project_name -o $project_name -f JSON > /dev/null
-                # cat $project_name/analyzer-result.json
+                ort analyze -i $project_name -o $project_name -f JSON > /dev/null
+                cat $project_name/analyzer-result.json
                 # rm -rf $project_name > /dev/null
             """
             result, error = shell_exec(shell_script)
