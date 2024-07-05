@@ -105,6 +105,7 @@ def callback_func(ch, method, properties, body):
             # When osv-scanner tool specify the '--format json' option, only the scan results are output to the standard output.
             # All other information is redirected to the standard error output;
             # Hence, error values are not checked here.
+            print("osv-scanner job done: {}".format(project_url))
             osv_result = json.loads(result.decode('utf-8')) if result != None else ""
             res_payload["scan_results"]["osv-scanner"] = osv_result
 
