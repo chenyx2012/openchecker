@@ -136,7 +136,7 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("binary-checker job done: {}".format(project_url))
-                result = result.decode('utf-8') if bool(result) else {}
+                result = result.decode('utf-8') if bool(result) else ""
                 data_list = result.split('\n')
                 binary_file_list = []
                 binary_archive_list = []
@@ -169,10 +169,7 @@ def callback_func(ch, method, properties, body):
 
             if error == None:
                 print("signature-checker job done: {}".format(project_url))
-                result = result.decode('utf-8') if bool(result) else {}
-                data_list = result.split('\n')
-                signature_result = {"signature_file_list": data_list[:-1]}
-                res_payload["scan_results"]["signature-checker"] = signature_result
+                res_payload["scan_results"]["signature-checker"] = {"signature_file_list": result.decode('utf-8').split('\n')[:-1]} if bool(result) else {}
             else:
                 print("gignature-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["signature-checker"] = {"error": json.dumps(error.decode("utf-8"))}
