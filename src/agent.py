@@ -239,7 +239,7 @@ def callback_func(ch, method, properties, body):
                 if [ ! -e "$project_name" ]; then
                     git clone {project_url} > /dev/null
                 fi
-                cp -r $project_name $project_name ~/ && cd ~
+                cp -r $project_name ~/ && cd ~
                 sonar-scanner \
                     -Dsonar.projectKey={sonar_project_name} \
                     -Dsonar.sources=$project_name \
