@@ -28,7 +28,9 @@ check_compressed_binary() {
 
 # Main script
 project_name=$(basename $1 | sed 's/\.git$//') > /dev/null
-git clone $1 > /dev/null 2>&1
+if [ ! -e "$project_name" ]; then
+    git clone $1 > /dev/null 2>&1
+fi
 
 for file in $(find $project_name -type f -not -path '*/.git/*' -not -path '*/test/*')
 do
@@ -44,4 +46,4 @@ do
         echo "Binary file found: $file"
     fi
 done
-rm -rf $project_name
+# rm -rf $project_name

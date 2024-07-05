@@ -73,6 +73,21 @@ def callback_func(ch, method, properties, body):
         }
     }
 
+    # download source code of the project
+    shell_script=f"""
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                if [ ! -e "$project_name" ]; then
+                    git clone {project_url} > /dev/null
+                fi
+            """
+
+    result, error = shell_exec(shell_script)
+
+    if error == None:
+        print("download source code done: {}".format(project_url))
+    else:
+        print("download source code failed: {}, error: {}".format(project_url, error))
+
     for command in command_list:
         if command == 'osv-scanner':
 
@@ -104,6 +119,7 @@ def callback_func(ch, method, properties, body):
                 fi
                 scancode -lc --json-pp scan_result.json $project_name --unknown-licenses -n 4 > /dev/null
                 cat scan_result.json
+                rm -rf scan_result.json > /dev/null
                 # rm -rf $project_name scan_result.json > /dev/null
             """
 
@@ -222,7 +238,10 @@ def callback_func(ch, method, properties, body):
 
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-                cd ~ && git clone {project_url} > /dev/null
+                if [ ! -e "$project_name" ]; then
+                    git clone {project_url} > /dev/null
+                fi
+                cp -r $project_name $project_name ~/ && cd ~
                 sonar-scanner \
                     -Dsonar.projectKey={sonar_project_name} \
                     -Dsonar.sources=$project_name \
@@ -264,8 +283,8 @@ def callback_func(ch, method, properties, body):
                     git clone {project_url} > /dev/null
                 fi
                 # ort analyze -i $project_name -o $project_name -f JSON > /dev/null
-                cat $project_name/analyzer-result.json
-                rm -rf $project_name > /dev/null
+                # cat $project_name/analyzer-result.json
+                # rm -rf $project_name > /dev/null
             """
             result, error = shell_exec(shell_script)
 
@@ -278,6 +297,21 @@ def callback_func(ch, method, properties, body):
 
         else:
             print(f"Unknown command: {command}")
+
+    # remove source code of the project
+    shell_script=f"""
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                if [ -e "$project_name" ]; then
+                    rm -rf $project_name > /dev/null
+                fi
+            """
+
+    result, error = shell_exec(shell_script)
+
+    if error == None:
+        print("remove source code done: {}".format(project_url))
+    else:
+        print("remove source code failed: {}, error: {}".format(project_url, error))
 
     if callback_url != None and callback_url != "":
         response = request_url(callback_url, res_payload)
