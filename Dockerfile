@@ -43,9 +43,13 @@ RUN cd /opt && wget https://github.com/oss-review-toolkit/ort/releases/download/
 
 # Install Java
 RUN apt-get update && \
-    apt-get install -y openjdk-11-jdk
+    apt-get install -y openjdk-11-jdk && \
+    curl -sL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && \
+    npm install -g pnpm
 
 COPY . .
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && \
+    pip install --upgrade urllib3
 
 CMD ["python", "src/main.py"]
