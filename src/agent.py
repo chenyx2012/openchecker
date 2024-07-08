@@ -95,7 +95,11 @@ def callback_func(ch, method, properties, body):
                 if [ ! -e "$project_name" ]; then
                     git clone {project_url} > /dev/null
                 fi
-                osv-scanner --format json -r $project_name
+                # Outputs the results as a JSON object to stdout, with all other output being directed to stderr
+                # - this makes it safe to redirect the output to a file.
+                # shell_exec function return (None, error) when process.returncode is not 0, so we redirect output to a file and cat.
+                osv-scanner --format json -r $project_name > $project_name/result.json
+                cat $project_name/result.json
                 # rm -rf $project_name > /dev/null
             """
 
