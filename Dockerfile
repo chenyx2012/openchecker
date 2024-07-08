@@ -41,12 +41,16 @@ RUN cd /opt && wget https://github.com/oss-review-toolkit/ort/releases/download/
     ln -s /opt/ort-25.0.0/bin/ort /usr/bin/ort && \
     rm ort-25.0.0.zip
 
-# Install Java
-RUN apt-get update && \
+# Install Java, nodejs and other packages manager
+RUN echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | tee /etc/apt/sources.list.d/sbt.list && \
+    echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | tee /etc/apt/sources.list.d/sbt_old.list && \
+    curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | apt-key add && \
+    apt-get update && \
     apt-get install -y openjdk-11-jdk && \
     curl -sL https://deb.nodesource.com/setup_18.x | bash - && \
-    apt-get install -y nodejs && \
-    npm install -g pnpm
+    apt-get install -y nodejs ruby-full build-essential sbt && \
+    npm install -g pnpm yarn bower && \
+    gem install cocoapods
 
 COPY . .
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && \
