@@ -45,9 +45,9 @@ RUN cd /opt && wget https://github.com/oss-review-toolkit/ort/releases/download/
 SHELL ["/bin/bash", "-l", "-c"]
 RUN gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 7D2BAF1CF37B13E2069D6956105BD0E739499BDB && \
     curl -sSL https://get.rvm.io | bash -s stable && source /etc/profile.d/rvm.sh && \
-    rvm install 2.6.6 && \
-    ln -s /usr/local/rvm/rubies/ruby-2.6.6/bin/ruby /usr/bin/ruby && \
-    ln -s /usr/local/rvm/bin/rvm /usr/bin/rvm && \
+    rvm install 3.1.6 && \
+    gem install cocoapods && \
+    echo "source /etc/profile.d/rvm.sh" >> ~/.bashrc && \
     echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | tee /etc/apt/sources.list.d/sbt.list && \
     echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | tee /etc/apt/sources.list.d/sbt_old.list && \
     curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | apt-key add && \
@@ -55,8 +55,7 @@ RUN gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A170311380
     apt-get install -y openjdk-11-jdk && \
     curl -sL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs build-essential sbt && \
-    npm install -g pnpm yarn bower && \
-    gem install cocoapods
+    npm install -g pnpm yarn bower
 
 COPY . .
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && \
