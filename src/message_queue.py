@@ -21,7 +21,6 @@ def create_queue(config, queue_name):
         channel = connection.channel()
 
         queue = channel.queue_declare(queue=queue_name, passive=True)
-        channel.basic_qos(prefetch_count=1)
         print("Queue {} exists, pass creating!".format(queue_name))
 
     except pika.exceptions.ChannelClosed as e:
@@ -29,7 +28,6 @@ def create_queue(config, queue_name):
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
         queue = channel.queue_declare(queue=queue_name)
-        channel.basic_qos(prefetch_count=1)
     except Exception as e:
         print(f"Error connecting to RabbitMQ: {str(e)}")
         exit()
@@ -58,6 +56,7 @@ def consumer(config, queue_name, callback_func):
     try:
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
+        channel.basic_qos(prefetch_count=1)
         channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=False)
         print('Consumer connected, wating for messages...')
         channel.start_consuming()
