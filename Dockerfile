@@ -47,7 +47,6 @@ RUN gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A170311380
     curl -sSL https://get.rvm.io | bash -s stable && source /etc/profile.d/rvm.sh && \
     rvm install 3.1.6 && \
     gem install cocoapods && \
-    echo "source /etc/profile.d/rvm.sh" >> ~/.bashrc && \
     echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | tee /etc/apt/sources.list.d/sbt.list && \
     echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | tee /etc/apt/sources.list.d/sbt_old.list && \
     curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | apt-key add && \
@@ -58,7 +57,9 @@ RUN gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A170311380
     npm install -g pnpm yarn bower
 
 COPY . .
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && \
+RUN chmod a+x scripts/entrypoint.sh && \
+    pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && \
     pip install --upgrade urllib3
 
+ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 CMD ["python", "src/main.py"]
