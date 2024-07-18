@@ -63,9 +63,11 @@ def init():
 if __name__ == '__main__':
     init()
 
+    server_config = read_config('config/config.ini', "OpenCheck")
+
     use_ssl = False  # Set this to True to enable SSL
     if use_ssl:
-        ssl_context = ('/path/to/certificate.crt', '/path/to/private.key')
-        app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)), ssl_context=ssl_context)
+        ssl_context = (server_config["ssl_crt_path"], server_config["ssl_key_path"])
+        app.run(debug=False, host=server_config["host"], port=int(server_config["port"]), ssl_context=ssl_context)
     else:
-        app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+        app.run(debug=False, host=server_config["host"], port=int(server_config["port"]))
