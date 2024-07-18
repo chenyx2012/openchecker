@@ -87,7 +87,6 @@ def callback_func(ch, method, properties, body):
     else:
         print("download source code failed: {}, error: {}".format(project_url, error))
         print("put messages to dead letters: {}".format(body))
-        ch.basic_publish(exchange='', routing_key="dead_letters", body=body)
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
         return
 
@@ -323,7 +322,6 @@ def callback_func(ch, method, properties, body):
         except Exception as e:
             print("Error happened when request to callback url: {}".format(e))
             print("put messages to dead letters: {}".format(body))
-            ch.basic_publish(exchange='', routing_key="dead_letters", body=body)
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             return
 
