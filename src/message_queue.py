@@ -12,7 +12,7 @@ def test_rabbitmq_connection(config):
     except Exception as e:
         print(f"Error connecting to RabbitMQ: {str(e)}")
 
-def create_queue(config, queue_name):
+def create_queue(config, queue_name, arguments={}):
     credentials = pika.PlainCredentials(config['username'], config['password'])
     parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials)
 
@@ -20,14 +20,14 @@ def create_queue(config, queue_name):
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
 
-        queue = channel.queue_declare(queue=queue_name, passive=True)
+        queue = channel.queue_declare(queue=queue_name, arguments=arguments, passive=True)
         print("Queue {} exists, pass creating!".format(queue_name))
 
     except pika.exceptions.ChannelClosed as e:
         print("Queue {} does not exist, created!".format(queue_name))
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
-        queue = channel.queue_declare(queue=queue_name)
+        queue = channel.queue_declare(queue=queue_name, arguments=arguments)
     except Exception as e:
         print(f"Error connecting to RabbitMQ: {str(e)}")
         exit()

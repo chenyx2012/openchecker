@@ -86,6 +86,10 @@ def callback_func(ch, method, properties, body):
         print("download source code done: {}".format(project_url))
     else:
         print("download source code failed: {}, error: {}".format(project_url, error))
+        print("put messages to dead letters: {}".format(body))
+        ch.basic_publish(exchange='', routing_key="dead_letters", body=body)
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        return
 
     for command in command_list:
         if command == 'osv-scanner':
@@ -313,8 +317,15 @@ def callback_func(ch, method, properties, body):
         print("remove source code failed: {}, error: {}".format(project_url, error))
 
     if callback_url != None and callback_url != "":
-        response = request_url(callback_url, res_payload)
-        print(f"Callback response: {response}")
+        try:
+            response = request_url(callback_url, res_payload)
+            print(f"Callback response: {response}")
+        except Exception as e:
+            print("Error happened when request to callback url: {}".format(e))
+            print("put messages to dead letters: {}".format(body))
+            ch.basic_publish(exchange='', routing_key="dead_letters", body=body)
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            return
 
     ch.basic_ack(delivery_tag=method.delivery_tag)
 

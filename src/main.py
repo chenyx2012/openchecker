@@ -57,8 +57,8 @@ api.add_resource(OpenCheck, '/opencheck')
 
 def init():
     test_rabbitmq_connection(config)
-    create_queue(config, "opencheck")
-
+    create_queue(config, "dead_letters")
+    create_queue(config, "opencheck", arguments={'x-dead-letter-exchange': '', 'x-dead-letter-routing-key': 'dead_letters'})
 
 if __name__ == '__main__':
     init()
