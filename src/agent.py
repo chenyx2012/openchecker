@@ -122,7 +122,7 @@ def callback_func(ch, method, properties, body):
                 if [ ! -e "$project_name" ]; then
                     git clone {project_url} > /dev/null
                 fi
-                scancode -lc --json-pp scan_result.json $project_name --license-score 80 --unknown-licenses -n 4 > /dev/null
+                scancode -lc --json-pp scan_result.json $project_name --license-score 80 -n 4 > /dev/null
                 cat scan_result.json
                 rm -rf scan_result.json > /dev/null
                 # rm -rf $project_name scan_result.json > /dev/null
