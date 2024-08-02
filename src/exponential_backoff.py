@@ -1,6 +1,8 @@
 import random
 import time
 import requests, urllib3
+from helper import read_config
+from openai import OpenAI
 
 # define a retry decorator
 def retry_with_exponential_backoff(
@@ -53,3 +55,17 @@ def retry_with_exponential_backoff(
 @retry_with_exponential_backoff
 def post_with_backoff(**kwargs):
     return requests.post(**kwargs)
+
+@retry_with_exponential_backoff
+def completion_with_backoff(**kwargs):
+    chatbot_config = read_config('config/config.ini', "ChatBot")
+
+    client = OpenAI(
+        api_key = chatbot_config["api_key"],
+        base_url = chatbot_config["base_url"]
+    )
+
+    # chat_completion = client.chat.completions.create(model=model, messages=messages)
+    chat_completion = client.chat.completions.create(**kwargs)
+
+    return chat_completion.choices[0].message.content

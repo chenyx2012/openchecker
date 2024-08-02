@@ -2,12 +2,13 @@ import subprocess
 from message_queue import consumer
 from helper import read_config
 from datetime import datetime
-from exponential_backoff import post_with_backoff
+from exponential_backoff import post_with_backoff, completion_with_backoff
 import json
 import requests
 import re
 import time
 import os
+import markdown
 
 config = read_config('config/config.ini')
 
@@ -89,6 +90,60 @@ def check_readme_opensource(project_url):
     else:
         return None, "README.OpenSource does not exist."
     return False
+
+def check_build_doc(project_url):
+    project_name = os.path.basename(project_url).replace('.git', '')
+
+    if not os.path.exists(project_name):
+        subprocess.run(["git", "clone", project_url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    dir_list = [project_name, project_name + '/' + 'doc', project_name + '/' + 'docs']
+
+    def get_documents_in_directory(path):
+        documents = []
+        if not os.path.exists(path):
+            return documents
+        for item in os.listdir(path):
+            full_path = os.path.join(path, item)
+            if os.path.isfile(full_path) and item.endswith(('.md', '.markdown')):
+                documents.append(full_path)
+        return documents
+
+    documents = []
+    for dir in dir_list:
+        documents.extend(get_documents_in_directory(dir))
+
+    templates = """
+        You are a professional programmer, please assess whether the provided text offers a thorough and in-depth introduction to the processes of software compilation and packaging.
+        If the text segment introduce the software compilation and packaging completely, please return 'YES'; otherwise, return 'NO'. Your response must not include other content.
+
+        Text content as below:
+
+        {text}
+
+    """
+
+    build_doc_file = []
+    for document in documents:
+        with open(document, 'r') as file:
+            markdown_text = file.read()
+            chunk_size = 3000
+            chunks = [markdown_text[i:i+chunk_size] for i in range(0, len(markdown_text), chunk_size)]
+
+        for i, chunk in enumerate(chunks):
+            messages = [
+                {
+                    "role": "user",
+                    "content": templates.format(text=chunk)
+                }
+            ]
+            result = completion_with_backoff(model='gpt-3.5-turbo', messages=messages)
+            print(document)
+            print(result)
+            if result == "YES":
+                build_doc_file.append(document)
+                return build_doc_file, None
+    return build_doc_file, None
 
 def callback_func(ch, method, properties, body):
 
@@ -379,6 +434,15 @@ def callback_func(ch, method, properties, body):
             else:
                 print("readme-opensource-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["readme-opensource-checker"] = {"error":error}
+
+        elif command == 'build-doc-checker':
+            result, error  = check_build_doc(project_url)
+            if error == None:
+                print("build-doc-checker job done: {}".format(project_url))
+                res_payload["scan_results"]["build-doc-checker"] = {"build-doc-checker": result} if bool(result) else {}
+            else:
+                print("build-doc-checker job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["build-doc-checker"] = {"error":error}
 
         else:
             print(f"Unknown command: {command}")
