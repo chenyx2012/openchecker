@@ -152,8 +152,6 @@ def check_doc_content(project_url, type):
                 }
             ]
             result = completion_with_backoff(model='gpt-3.5-turbo', messages=messages)
-            print(document)
-            print(result)
             if result == "YES":
                 build_doc_file.append(document)
                 return build_doc_file, None
