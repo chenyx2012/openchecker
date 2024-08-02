@@ -81,15 +81,16 @@ def check_readme_opensource(project_url):
                             break
 
                     if all_entries_valid:
-                        return "The README.OpenSource file exists and is properly formatted.", None
+                        # return "The README.OpenSource file exists and is properly formatted.", None
+                        return True, None
                     else:
-                        return None, "The README.OpenSource file exists and is not properly formatted."
+                        # return None, "The README.OpenSource file exists and is not properly formatted."
+                        return False, "The README.OpenSource file exists and is not properly formatted."
 
             except json.JSONDecodeError:
-                return None, "README.OpenSource is not properly formatted."
+                return False, "README.OpenSource is not properly formatted."
     else:
-        return None, "README.OpenSource does not exist."
-    return False
+        return False, "README.OpenSource does not exist."
 
 def check_doc_content(project_url, type):
     project_name = os.path.basename(project_url).replace('.git', '')
