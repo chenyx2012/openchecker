@@ -151,7 +151,7 @@ def check_doc_content(project_url, type):
                     "content": templates.format(text=chunk)
                 }
             ]
-            result = completion_with_backoff(model='gpt-3.5-turbo', messages=messages)
+            result = completion_with_backoff(model='gpt-3.5-turbo', messages=messages, temperature=0.2)
             if result == "YES":
                 build_doc_file.append(document)
                 return build_doc_file, None
