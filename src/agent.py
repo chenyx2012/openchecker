@@ -7,6 +7,7 @@ import json
 import requests
 import re
 import time
+import os
 
 config = read_config('config/config.ini')
 
@@ -55,14 +56,50 @@ def request_url (url, payload):
         print(f"Failed to send request. Status code: {response.status_code}")
         return None
 
+def check_readme_opensource(project_url):
+    project_name = os.path.basename(project_url).replace('.git', '')
+
+    if not os.path.exists(project_name):
+        subprocess.run(["git", "clone", project_url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    readme_file = os.path.join(project_name, "README.OpenSource")
+    if os.path.isfile(readme_file):
+        with open(readme_file, 'r', encoding='utf-8') as file:
+            try:
+                content = json.load(file)
+
+                if isinstance(content, list):
+                    required_keys = [
+                        "Name", "License", "License File",
+                        "Version Number", "Owner", "Upstream URL", "Description"
+                    ]
+
+                    all_entries_valid = True
+                    for entry in content:
+                        if not isinstance(entry, dict) or not all(key in entry for key in required_keys):
+                            all_entries_valid = False
+                            break
+
+                    if all_entries_valid:
+                        return "The README.OpenSource file exists and is properly formatted.", None
+                    else:
+                        return None, "The README.OpenSource file exists and is not properly formatted."
+
+            except json.JSONDecodeError:
+                return None, "README.OpenSource is not properly formatted."
+    else:
+        return None, "README.OpenSource does not exist."
+    return False
 
 def callback_func(ch, method, properties, body):
+
     print(f"callback func called at {datetime.now()}")
+
     message = json.loads(body.decode('utf-8'))
     command_list = message.get('command_list')
     project_url = message.get('project_url')
     callback_url = message.get('callback_url')
     task_metadata = message.get('task_metadata')
+    print(project_url)
 
     res_payload = {
         "command_list": command_list,
@@ -89,7 +126,6 @@ def callback_func(ch, method, properties, body):
         print("put messages to dead letters: {}".format(body))
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
         return
-
     for command in command_list:
         if command == 'osv-scanner':
 
@@ -296,6 +332,53 @@ def callback_func(ch, method, properties, body):
             else:
                 print("dependency-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["dependency-checker"] = {"error": json.dumps(error.decode("utf-8"))}
+
+        elif command == 'readme-checker':
+
+            shell_script=f"""
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                if [ ! -e "$project_name" ]; then
+                    git clone {project_url} > /dev/null
+                fi
+                find "$project_name" -type f \( -name "README*" -o -name ".github/README*" -o -name "docs/README*" \) -print
+            """
+
+            result, error = shell_exec(shell_script)
+
+            if error == None:
+                print("readme-checker job done: {}".format(project_url))
+                res_payload["scan_results"]["readme-checker"] = {"readme_file": result.decode('utf-8').split('\n')[:-1]} if bool(result) else {}
+            else:
+                print("readme-checker job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["readme-checker"] = {"error": json.dumps(error.decode("utf-8"))}
+
+        elif command == 'maintainers-checker':
+
+            shell_script=f"""
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                if [ ! -e "$project_name" ]; then
+                    git clone {project_url} > /dev/null
+                fi
+                find "$project_name" -type f \( -iname "MAINTAINERS*" -o -iname "OWNERS*" -o -iname "CODEOWNERS*" \) -print
+            """
+
+            result, error = shell_exec(shell_script)
+
+            if error == None:
+                print("maintainers-checker job done: {}".format(project_url))
+                res_payload["scan_results"]["maintainers-checker"] = {"maintainers_file": result.decode('utf-8').split('\n')[:-1]} if bool(result) else {}
+            else:
+                print("maintainers-checker job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["maintainers-checker"] = {"error": json.dumps(error.decode("utf-8"))}
+
+        elif command == 'readme-opensource-checker':
+            result, error  = check_readme_opensource(project_url)
+            if error == None:
+                print("readme-opensource-checker job done: {}".format(project_url))
+                res_payload["scan_results"]["readme-opensource-checker"] = {"readme-opensource-checker": result} if bool(result) else {}
+            else:
+                print("readme-opensource-checker job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["readme-opensource-checker"] = {"error":error}
 
         else:
             print(f"Unknown command: {command}")
