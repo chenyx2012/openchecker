@@ -91,7 +91,7 @@ def check_readme_opensource(project_url):
         return None, "README.OpenSource does not exist."
     return False
 
-def check_build_doc(project_url):
+def check_doc_content(project_url, type):
     project_name = os.path.basename(project_url).replace('.git', '')
 
     if not os.path.exists(project_name):
@@ -113,15 +113,29 @@ def check_build_doc(project_url):
     for dir in dir_list:
         documents.extend(get_documents_in_directory(dir))
 
-    templates = """
-        You are a professional programmer, please assess whether the provided text offers a thorough and in-depth introduction to the processes of software compilation and packaging.
-        If the text segment introduce the software compilation and packaging completely, please return 'YES'; otherwise, return 'NO'. Your response must not include other content.
+    if type == "build-doc":
+        templates = """
+            You are a professional programmer, please assess whether the provided text offers a thorough and in-depth introduction to the processes of software compilation and packaging.
+            If the text segment introduce the software compilation and packaging completely, please return 'YES'; otherwise, return 'NO'. Your response must not include other content.
 
-        Text content as below:
+            Text content as below:
 
-        {text}
+            {text}
 
-    """
+        """
+    elif type == "api-doc":
+        templates = """
+            You are a professional programmer, please assess whether the provided text offer a comprehensive introduction to the use of software API.
+            If the text segment introduce the software API completely, please return 'YES'; otherwise, return 'NO'. Your response must not include other content.
+
+            Text content as below:
+
+            {text}
+
+        """
+    else:
+        print("Unsupported type: {}".format(type))
+        return [], None
 
     build_doc_file = []
     for document in documents:
@@ -436,13 +450,22 @@ def callback_func(ch, method, properties, body):
                 res_payload["scan_results"]["readme-opensource-checker"] = {"error":error}
 
         elif command == 'build-doc-checker':
-            result, error  = check_build_doc(project_url)
+            result, error  = check_doc_content(project_url, "build-doc")
             if error == None:
                 print("build-doc-checker job done: {}".format(project_url))
                 res_payload["scan_results"]["build-doc-checker"] = {"build-doc-checker": result} if bool(result) else {}
             else:
                 print("build-doc-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["build-doc-checker"] = {"error":error}
+
+        elif command == 'api-doc-checker':
+            result, error  = check_doc_content(project_url, "api-doc")
+            if error == None:
+                print("api-doc-checker job done: {}".format(project_url))
+                res_payload["scan_results"]["api-doc-checker"] = {"api-doc-checker": result} if bool(result) else {}
+            else:
+                print("api-doc-checker job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["api-doc-checker"] = {"error":error}
 
         else:
             print(f"Unknown command: {command}")
