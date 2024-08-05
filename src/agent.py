@@ -8,7 +8,9 @@ import requests
 import re
 import time
 import os
-import markdown
+from ghapi.all import GhApi
+import zipfile
+import io
 
 config = read_config('config/config.ini')
 
@@ -158,6 +160,55 @@ def check_doc_content(project_url, type):
                 return build_doc_file, None
     return build_doc_file, None
 
+def check_release_content(project_url):
+    owner_name = re.match(r"https://(?:github|gitee).com/([^/]+)/", project_url).group(1)
+    repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
+
+    if "github.com" in project_url:
+        api = GhApi(owner=owner_name, repo=repo_name)
+        try:
+            latest_release = api.repos.get_latest_release()
+        except Exception as e:
+            print("Failed to get latest release for repo: {} \n Error: {}".format(project_url, e))
+            return {"is_released": False, "signature_files": [], "release_notes": []}, e
+
+        latest_release_url = latest_release["zipball_url"]
+
+    elif "gitee.com" in project_url:
+        url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/releases/latest"
+        try:
+            response = requests.get(url)
+            if response.status_code == 200:
+                tag_name = response.json()["tag_name"]
+                access_token = config["Gitee"]["access_key"]
+                # latest_release_url = response.json()["assets"][0]["browser_download_url"]
+                latest_release_url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/zipball?access_token={access_token}&ref={tag_name}"
+            else:
+                print("Failed to get latest release for repo: {} \n Error: {}".format(project_url, "Not found"))
+                return {"is_released": False, "signature_files": [], "release_notes": []}, "Not found"
+        except Exception as e:
+            print("Failed to get latest release for repo: {} \n Error: {}".format(project_url, e))
+            return {"is_released": False, "signature_files": [], "release_notes": []}, e
+
+    else:
+        print("Failed to do release files check for repo: {} \n Error: {}".format(project_url, "Not supported platform."))
+        return {"is_released": False, "signature_files": [], "release_notes": []}, "Not supported platform."
+
+    response = requests.get(latest_release_url)
+    if response.status_code != 200:
+        return {"is_released": True, "signature_files": [], "release_notes": []}, "Failed to download release."
+
+    signature_files = []
+    changelog_files = []
+    with zipfile.ZipFile(io.BytesIO(response.content), 'r') as zip_ref:
+        signature_suffixes = ["*.asc", "*.sig", "*.cer", "*.crt", "*.pem", "*.sha256", "*.sha512"]
+        signature_files = [ file for file in zip_ref.namelist() if any(file.lower().endswith(suffix) for suffix in signature_suffixes) ]
+
+        changelog_names = ["changelog", "releasenotes", "release_notes"]
+        changelog_files = [ file for file in zip_ref.namelist() if any(name in os.path.basename(file).lower() for name in changelog_names)]
+
+    return {"is_released": True, "signature_files": signature_files, "release_notes": changelog_files},
+
 def callback_func(ch, method, properties, body):
 
     print(f"callback func called at {datetime.now()}")
@@ -265,25 +316,16 @@ def callback_func(ch, method, properties, body):
                 print("binary-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["binary-checker"] = {"error": json.dumps(error.decode("utf-8"))}
 
-        elif command == 'signature-checker':
+        elif command == 'release-checker':
 
-            shell_script=f"""
-                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-                if [ ! -e "$project_name" ]; then
-                    git clone {project_url} > /dev/null
-                fi
-                find "$project_name" -type f \( -name "*.asc" -o -name "*.sig" -o -name "*.cer" -o -name "*.crt" -o -name "*.pem" -o -name "*.sha256" -o -name "*.sha512" \) -print
-                # rm -rf $project_name > /dev/null
-            """
-
-            result, error = shell_exec(shell_script)
+            result, error = check_release_content(project_url)
 
             if error == None:
-                print("signature-checker job done: {}".format(project_url))
-                res_payload["scan_results"]["signature-checker"] = {"signature_file_list": result.decode('utf-8').split('\n')[:-1]} if bool(result) else {}
+                print("release-checker job done: {}".format(project_url))
+                res_payload["scan_results"]["release-checker"] = result
             else:
-                print("gignature-checker job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["signature-checker"] = {"error": json.dumps(error.decode("utf-8"))}
+                print("release-checker job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["release-checker"] = {"error": error}
 
         elif command == 'url-checker':
             from urllib import request
