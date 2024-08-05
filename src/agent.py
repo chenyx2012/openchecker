@@ -207,7 +207,7 @@ def check_release_content(project_url):
         changelog_names = ["changelog", "releasenotes", "release_notes"]
         changelog_files = [ file for file in zip_ref.namelist() if any(name in os.path.basename(file).lower() for name in changelog_names)]
 
-    return {"is_released": True, "signature_files": signature_files, "release_notes": changelog_files},
+    return {"is_released": True, "signature_files": signature_files, "release_notes": changelog_files}, None
 
 def callback_func(ch, method, properties, body):
 
