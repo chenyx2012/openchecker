@@ -16,7 +16,7 @@ usernameTable = {u.name: u for u in userList}
 useridTable = {u.id: u for u in userList}
 
 def createUser(username, password, access):
-    users.append(User(str(uuid.uuid5(uuid.NAMESPACE_DNS, username)), username, password, access))
+    userList.append(User(str(uuid.uuid5(uuid.NAMESPACE_DNS, username)), username, password, access))
 
 def indexUserWithID(userID):
     return useridTable.get(userID, None)
