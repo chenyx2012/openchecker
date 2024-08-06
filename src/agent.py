@@ -11,6 +11,9 @@ import os
 from ghapi.all import GhApi
 import zipfile
 import io
+import logging
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 config = read_config('config/config.ini')
 
@@ -32,7 +35,7 @@ def dependency_checker_output_process(output):
                 result["packages_without_license_detect"].append(package["purl"])
 
     except Exception as e:
-        print(f"Error processing dependency-checker output: {e}")
+        logging.info(f"Error processing dependency-checker output: {e}")
         return {}
 
     return result
@@ -53,10 +56,10 @@ def request_url (url, payload):
     response = post_with_backoff(url=url, json=payload)
 
     if response.status_code == 200:
-        print("Request sent successfully.")
+        logging.info("Request sent successfully.")
         return response.text
     else:
-        print(f"Failed to send request. Status code: {response.status_code}")
+        logging.info(f"Failed to send request. Status code: {response.status_code}")
         return None
 
 def check_readme_opensource(project_url):
@@ -139,7 +142,7 @@ def check_doc_content(project_url, type):
 
         """
     else:
-        print("Unsupported type: {}".format(type))
+        logging.info("Unsupported type: {}".format(type))
         return [], None
 
     build_doc_file = []
@@ -171,7 +174,7 @@ def check_release_content(project_url):
         try:
             latest_release = api.repos.get_latest_release()
         except Exception as e:
-            print("Failed to get latest release for repo: {} \n Error: {}".format(project_url, e))
+            logging.info("Failed to get latest release for repo: {} \n Error: {}".format(project_url, e))
             return {"is_released": False, "signature_files": [], "release_notes": []}, e
 
         latest_release_url = latest_release["zipball_url"]
@@ -186,14 +189,14 @@ def check_release_content(project_url):
                 # latest_release_url = response.json()["assets"][0]["browser_download_url"]
                 latest_release_url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/zipball?access_token={access_token}&ref={tag_name}"
             else:
-                print("Failed to get latest release for repo: {} \n Error: {}".format(project_url, "Not found"))
+                logging.info("Failed to get latest release for repo: {} \n Error: {}".format(project_url, "Not found"))
                 return {"is_released": False, "signature_files": [], "release_notes": []}, "Not found"
         except Exception as e:
-            print("Failed to get latest release for repo: {} \n Error: {}".format(project_url, e))
+            logging.info("Failed to get latest release for repo: {} \n Error: {}".format(project_url, e))
             return {"is_released": False, "signature_files": [], "release_notes": []}, e
 
     else:
-        print("Failed to do release files check for repo: {} \n Error: {}".format(project_url, "Not supported platform."))
+        logging.info("Failed to do release files check for repo: {} \n Error: {}".format(project_url, "Not supported platform."))
         return {"is_released": False, "signature_files": [], "release_notes": []}, "Not supported platform."
 
     response = requests.get(latest_release_url)
@@ -213,14 +216,14 @@ def check_release_content(project_url):
 
 def callback_func(ch, method, properties, body):
 
-    print(f"callback func called at {datetime.now()}")
+    logging.info(f"callback func called at {datetime.now()}")
 
     message = json.loads(body.decode('utf-8'))
     command_list = message.get('command_list')
     project_url = message.get('project_url')
     callback_url = message.get('callback_url')
     task_metadata = message.get('task_metadata')
-    print(project_url)
+    logging.info(project_url)
 
     res_payload = {
         "command_list": command_list,
@@ -241,10 +244,10 @@ def callback_func(ch, method, properties, body):
     result, error = shell_exec(shell_script)
 
     if error == None:
-        print("download source code done: {}".format(project_url))
+        logging.info("download source code done: {}".format(project_url))
     else:
-        print("download source code failed: {}, error: {}".format(project_url, error))
-        print("put messages to dead letters: {}".format(body))
+        logging.info("download source code failed: {}, error: {}".format(project_url, error))
+        logging.info("put messages to dead letters: {}".format(body))
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
         return
     for command in command_list:
@@ -268,7 +271,7 @@ def callback_func(ch, method, properties, body):
             # When osv-scanner tool specify the '--format json' option, only the scan results are output to the standard output.
             # All other information is redirected to the standard error output;
             # Hence, error values are not checked here.
-            print("osv-scanner job done: {}".format(project_url))
+            logging.info("osv-scanner job done: {}".format(project_url))
             osv_result = json.loads(result.decode('utf-8')) if bool(result) else {}
             res_payload["scan_results"]["osv-scanner"] = osv_result
 
@@ -288,18 +291,18 @@ def callback_func(ch, method, properties, body):
             result, error = shell_exec(shell_script)
 
             if error == None:
-                print("scancode job done: {}".format(project_url))
+                logging.info("scancode job done: {}".format(project_url))
                 scancode_result = json.loads(result.decode('utf-8')) if bool(result) else {}
                 res_payload["scan_results"]["scancode"] = scancode_result
             else:
-                print("scancode job failed: {}, error: {}".format(project_url, error))
+                logging.info("scancode job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["scancode"] = {"error": json.dumps(error.decode("utf-8"))}
 
         elif command == 'binary-checker':
             result, error = shell_exec("./scripts/binary_checker.sh", project_url)
 
             if error == None:
-                print("binary-checker job done: {}".format(project_url))
+                logging.info("binary-checker job done: {}".format(project_url))
                 result = result.decode('utf-8') if bool(result) else ""
                 data_list = result.split('\n')
                 binary_file_list = []
@@ -315,7 +318,7 @@ def callback_func(ch, method, properties, body):
                 res_payload["scan_results"]["binary-checker"] = binary_result
 
             else:
-                print("binary-checker job failed: {}, error: {}".format(project_url, error))
+                logging.info("binary-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["binary-checker"] = {"error": json.dumps(error.decode("utf-8"))}
 
         elif command == 'release-checker':
@@ -323,10 +326,10 @@ def callback_func(ch, method, properties, body):
             result, error = check_release_content(project_url)
 
             if error == None:
-                print("release-checker job done: {}".format(project_url))
+                logging.info("release-checker job done: {}".format(project_url))
                 res_payload["scan_results"]["release-checker"] = result
             else:
-                print("release-checker job failed: {}, error: {}".format(project_url, error))
+                logging.info("release-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["release-checker"] = {"error": error}
 
         elif command == 'url-checker':
@@ -334,13 +337,13 @@ def callback_func(ch, method, properties, body):
             try:
                 with request.urlopen(project_url) as file:
                     if file.status == 200 and file.reason == "OK":
-                        print("url-checker job done: {}".format(project_url))
+                        logging.info("url-checker job done: {}".format(project_url))
                         url_result = {"url": project_url, "status": "pass", "error": "null"}
                     else:
-                        print("url-checker job failed: {}".format(project_url))
+                        logging.info("url-checker job failed: {}".format(project_url))
                         url_result = {"url": project_url, "status": "fail", "error": file.reason}
             except Exception as e:
-                print("gignature-checker job failed: {}, error: {}".format(project_url, e))
+                logging.info("gignature-checker job failed: {}, error: {}".format(project_url, e))
                 url_result = {"error": e}
             res_payload["scan_results"]["url-checker"] = url_result
 
@@ -365,13 +368,13 @@ def callback_func(ch, method, properties, body):
             try:
                 response = requests.get(sonar_search_procet_api, auth=auth, params={"projects": sonar_project_name})
                 if response.status_code == 200:
-                    print("Call sonarqube projects search api success: 200")
+                    logging.info("Call sonarqube projects search api success: 200")
                     res = json.loads(response.text)
                     is_exit = True if res["paging"]["total"] > 0 else False
                 else:
-                    print(f"Call sonarqube projects search api failed with status code: {response.status_code}")
+                    logging.info(f"Call sonarqube projects search api failed with status code: {response.status_code}")
             except requests.exceptions.RequestException as e:
-                print(f"Call sonarqube projects search api failed with error: {e}")
+                logging.info(f"Call sonarqube projects search api failed with error: {e}")
 
             if not is_exit:
                 sonar_create_procet_api = f"http://{sonar_config['host']}:{sonar_config['port']}/api/projects/create"
@@ -380,11 +383,11 @@ def callback_func(ch, method, properties, body):
                 try:
                     response = requests.post(sonar_create_procet_api, auth=auth, data=data)
                     if response.status_code == 200:
-                        print("Call sonarqube projects create api success: 200")
+                        logging.info("Call sonarqube projects create api success: 200")
                     else:
-                        print(f"Call sonarqube projects create api failed with status code: {response.status_code}")
+                        logging.info(f"Call sonarqube projects create api failed with status code: {response.status_code}")
                 except requests.exceptions.RequestException as e:
-                    print(f"Call sonarqube projects create api failed with error: {e}")
+                    logging.info(f"Call sonarqube projects create api failed with error: {e}")
 
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
@@ -404,7 +407,7 @@ def callback_func(ch, method, properties, body):
             result, error = shell_exec(shell_script)
 
             if error == None:
-                print("sonar-scanner finish scanning project: {}, report querying...".format(project_url))
+                logging.info("sonar-scanner finish scanning project: {}, report querying...".format(project_url))
 
                 sonar_query_measures_api = f"http://{sonar_config['host']}:{sonar_config['port']}/api/measures/component"
 
@@ -413,17 +416,17 @@ def callback_func(ch, method, properties, body):
                     time.sleep(60)
                     response = requests.get(sonar_query_measures_api, auth=auth, params={"component": sonar_project_name, "metricKeys": "coverage,complexity,duplicated_lines_density,lines"})
                     if response.status_code == 200:
-                        print("Querying sonar-scanner report success: 200")
+                        logging.info("Querying sonar-scanner report success: 200")
                         sonar_result = json.loads(response.text)
                         res_payload["scan_results"]["sonar-scanner"] = sonar_result
                     else:
-                        print(f"Querying sonar-scanner report failed with status code: {response.status_code}")
+                        logging.info(f"Querying sonar-scanner report failed with status code: {response.status_code}")
                 except requests.exceptions.RequestException as e:
-                    print(f"Querying sonar-scanner report failed with error: {e}")
+                    logging.info(f"Querying sonar-scanner report failed with error: {e}")
 
-                print("sonar-scanner job done: {}".format(project_url))
+                logging.info("sonar-scanner job done: {}".format(project_url))
             else:
-                print("sonar-scanner job failed: {}, error: {}".format(project_url, error))
+                logging.info("sonar-scanner job failed: {}, error: {}".format(project_url, error))
 
         elif command == 'dependency-checker':
 
@@ -439,10 +442,10 @@ def callback_func(ch, method, properties, body):
             result, error = shell_exec(shell_script)
 
             if error == None:
-                print("dependency-checker job done: {}".format(project_url))
+                logging.info("dependency-checker job done: {}".format(project_url))
                 res_payload["scan_results"]["dependency-checker"] = dependency_checker_output_process(result)
             else:
-                print("dependency-checker job failed: {}, error: {}".format(project_url, error))
+                logging.info("dependency-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["dependency-checker"] = {"error": json.dumps(error.decode("utf-8"))}
 
         elif command == 'readme-checker':
@@ -458,10 +461,10 @@ def callback_func(ch, method, properties, body):
             result, error = shell_exec(shell_script)
 
             if error == None:
-                print("readme-checker job done: {}".format(project_url))
+                logging.info("readme-checker job done: {}".format(project_url))
                 res_payload["scan_results"]["readme-checker"] = {"readme_file": result.decode('utf-8').split('\n')[:-1]} if bool(result) else {}
             else:
-                print("readme-checker job failed: {}, error: {}".format(project_url, error))
+                logging.info("readme-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["readme-checker"] = {"error": json.dumps(error.decode("utf-8"))}
 
         elif command == 'maintainers-checker':
@@ -477,41 +480,41 @@ def callback_func(ch, method, properties, body):
             result, error = shell_exec(shell_script)
 
             if error == None:
-                print("maintainers-checker job done: {}".format(project_url))
+                logging.info("maintainers-checker job done: {}".format(project_url))
                 res_payload["scan_results"]["maintainers-checker"] = {"maintainers_file": result.decode('utf-8').split('\n')[:-1]} if bool(result) else {}
             else:
-                print("maintainers-checker job failed: {}, error: {}".format(project_url, error))
+                logging.info("maintainers-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["maintainers-checker"] = {"error": json.dumps(error.decode("utf-8"))}
 
         elif command == 'readme-opensource-checker':
             result, error  = check_readme_opensource(project_url)
             if error == None:
-                print("readme-opensource-checker job done: {}".format(project_url))
+                logging.info("readme-opensource-checker job done: {}".format(project_url))
                 res_payload["scan_results"]["readme-opensource-checker"] = {"readme-opensource-checker": result} if bool(result) else {}
             else:
-                print("readme-opensource-checker job failed: {}, error: {}".format(project_url, error))
+                logging.info("readme-opensource-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["readme-opensource-checker"] = {"error":error}
 
         elif command == 'build-doc-checker':
             result, error  = check_doc_content(project_url, "build-doc")
             if error == None:
-                print("build-doc-checker job done: {}".format(project_url))
+                logging.info("build-doc-checker job done: {}".format(project_url))
                 res_payload["scan_results"]["build-doc-checker"] = {"build-doc-checker": result} if bool(result) else {}
             else:
-                print("build-doc-checker job failed: {}, error: {}".format(project_url, error))
+                logging.info("build-doc-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["build-doc-checker"] = {"error":error}
 
         elif command == 'api-doc-checker':
             result, error  = check_doc_content(project_url, "api-doc")
             if error == None:
-                print("api-doc-checker job done: {}".format(project_url))
+                logging.info("api-doc-checker job done: {}".format(project_url))
                 res_payload["scan_results"]["api-doc-checker"] = {"api-doc-checker": result} if bool(result) else {}
             else:
-                print("api-doc-checker job failed: {}, error: {}".format(project_url, error))
+                logging.info("api-doc-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["api-doc-checker"] = {"error":error}
 
         else:
-            print(f"Unknown command: {command}")
+            logging.info(f"Unknown command: {command}")
 
     # remove source code of the project
     shell_script=f"""
@@ -524,17 +527,17 @@ def callback_func(ch, method, properties, body):
     result, error = shell_exec(shell_script)
 
     if error == None:
-        print("remove source code done: {}".format(project_url))
+        logging.info("remove source code done: {}".format(project_url))
     else:
-        print("remove source code failed: {}, error: {}".format(project_url, error))
+        logging.info("remove source code failed: {}, error: {}".format(project_url, error))
 
     if callback_url != None and callback_url != "":
         try:
             response = request_url(callback_url, res_payload)
-            print(f"Callback response: {response}")
+            logging.info(f"Callback response: {response}")
         except Exception as e:
-            print("Error happened when request to callback url: {}".format(e))
-            print("put messages to dead letters: {}".format(body))
+            logging.info("Error happened when request to callback url: {}".format(e))
+            logging.info("put messages to dead letters: {}".format(body))
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             return
 
@@ -542,4 +545,4 @@ def callback_func(ch, method, properties, body):
 
 if __name__ == "__main__":
     consumer(config["RabbitMQ"], "opencheck", callback_func)
-    print('Agents server ended.')
+    logging.info('Agents server ended.')

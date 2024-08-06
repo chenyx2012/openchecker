@@ -1,5 +1,6 @@
 import pika
 from helper import read_config
+import logging
 
 def test_rabbitmq_connection(config):
     credentials = pika.PlainCredentials(config['username'], config['password'])
@@ -8,9 +9,9 @@ def test_rabbitmq_connection(config):
     try:
         connection = pika.BlockingConnection(parameters)
         connection.close()
-        print("RabbitMQ connection successful.")
+        logging.info("RabbitMQ connection successful.")
     except Exception as e:
-        print(f"Error connecting to RabbitMQ: {str(e)}")
+        logging.info(f"Error connecting to RabbitMQ: {str(e)}")
 
 def create_queue(config, queue_name, arguments={}):
     credentials = pika.PlainCredentials(config['username'], config['password'])
@@ -21,15 +22,15 @@ def create_queue(config, queue_name, arguments={}):
         channel = connection.channel()
 
         queue = channel.queue_declare(queue=queue_name, arguments=arguments, passive=True)
-        print("Queue {} exists, pass creating!".format(queue_name))
+        logging.info("Queue {} exists, pass creating!".format(queue_name))
 
     except pika.exceptions.ChannelClosed as e:
-        print("Queue {} does not exist, created!".format(queue_name))
+        logging.info("Queue {} does not exist, created!".format(queue_name))
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
         queue = channel.queue_declare(queue=queue_name, arguments=arguments)
     except Exception as e:
-        print(f"Error connecting to RabbitMQ: {str(e)}")
+        logging.info(f"Error connecting to RabbitMQ: {str(e)}")
         exit()
 
     connection.close()
@@ -43,10 +44,10 @@ def publish_message(config, queue_name, message_body):
         channel = connection.channel()
         channel.basic_publish(exchange='', routing_key=queue_name, body=message_body)
         connection.close()
-        print(f"Publish message successed!")
+        logging.info(f"Publish message successed!")
         return None
     except Exception as e:
-        print("Publish message failed as: {}".format(e))
+        logging.info("Publish message failed as: {}".format(e))
         return str(e)
 
 def consumer(config, queue_name, callback_func):
@@ -58,11 +59,11 @@ def consumer(config, queue_name, callback_func):
         channel = connection.channel()
         channel.basic_qos(prefetch_count=1)
         channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=False)
-        print('Consumer connected, wating for messages...')
+        logging.info('Consumer connected, wating for messages...')
         channel.start_consuming()
 
     except Exception as e:
-        print("Consumer failed as: {}".format(e))
+        logging.info("Consumer failed as: {}".format(e))
         return str(e)
 
 if __name__ == "__main__":
