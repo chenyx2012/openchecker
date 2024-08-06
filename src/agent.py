@@ -119,7 +119,8 @@ def check_doc_content(project_url, type):
     if type == "build-doc":
         templates = """
             You are a professional programmer, please assess whether the provided text offers a thorough and in-depth introduction to the processes of software compilation and packaging.
-            If the text segment introduce the software compilation and packaging completely, please return 'YES'; otherwise, return 'NO'. Your response must not include other content.
+            If the text segment introduce the software compilation and packaging completely, please return 'YES'; otherwise, return 'NO'.
+            You need to ensure the accuracy of your answers as much as possible, and if unsure, please simply answer NO. Your response must not include other content.
 
             Text content as below:
 
@@ -129,7 +130,8 @@ def check_doc_content(project_url, type):
     elif type == "api-doc":
         templates = """
             You are a professional programmer, please assess whether the provided text offer a comprehensive introduction to the use of software API.
-            If the text segment introduce the software API completely, please return 'YES'; otherwise, return 'NO'. Your response must not include other content.
+            If the text segment introduce the software API completely, please return 'YES'; otherwise, return 'NO'.
+            You need to ensure the accuracy of your answers as much as possible, and if unsure, please simply answer NO. Your response must not include other content.
 
             Text content as below:
 
