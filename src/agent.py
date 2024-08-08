@@ -175,7 +175,7 @@ def check_release_content(project_url):
             latest_release = api.repos.get_latest_release()
         except Exception as e:
             logging.info("Failed to get latest release for repo: {} \n Error: {}".format(project_url, e))
-            return {"is_released": False, "signature_files": [], "release_notes": []}, e
+            return {"is_released": False, "signature_files": [], "release_notes": []}, "Not found"
 
         latest_release_url = latest_release["zipball_url"]
 
@@ -193,7 +193,7 @@ def check_release_content(project_url):
                 return {"is_released": False, "signature_files": [], "release_notes": []}, "Not found"
         except Exception as e:
             logging.info("Failed to get latest release for repo: {} \n Error: {}".format(project_url, e))
-            return {"is_released": False, "signature_files": [], "release_notes": []}, e
+            return {"is_released": False, "signature_files": [], "release_notes": []}, "Not found"
 
     else:
         logging.info("Failed to do release files check for repo: {} \n Error: {}".format(project_url, "Not supported platform."))
