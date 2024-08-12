@@ -481,7 +481,7 @@ def callback_func(ch, method, properties, body):
                 if [ ! -e "$project_name" ]; then
                     git clone {project_url} > /dev/null
                 fi
-                find "$project_name" -type f \( -iname "MAINTAINERS*" -o -iname "OWNERS*" -o -iname "CODEOWNERS*" \) -print
+                find "$project_name" -type f \( -iname "MAINTAINERS*" -o -iname "COMMITTERS*" -o -iname "OWNERS*" -o -iname "CODEOWNERS*" \) -print
             """
 
             result, error = shell_exec(shell_script)
