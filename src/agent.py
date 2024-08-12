@@ -120,6 +120,7 @@ def check_doc_content(project_url, type):
         documents.extend(get_documents_in_directory(dir))
 
     if type == "build-doc":
+        do_link_include_check = True
         templates = """
             You are a professional programmer, please assess whether the provided text offers a thorough and in-depth introduction to the processes of software compilation and packaging.
             If the text segment introduce the software compilation and packaging completely, please return 'YES'; otherwise, return 'NO'.
@@ -131,6 +132,7 @@ def check_doc_content(project_url, type):
 
         """
     elif type == "api-doc":
+        do_link_include_check = False
         templates = """
             You are a professional programmer, please assess whether the provided text offer a comprehensive introduction to the use of software API.
             If the text segment introduce the software API completely, please return 'YES'; otherwise, return 'NO'.
@@ -152,13 +154,18 @@ def check_doc_content(project_url, type):
             chunk_size = 3000
             chunks = [markdown_text[i:i+chunk_size] for i in range(0, len(markdown_text), chunk_size)]
 
-        for i, chunk in enumerate(chunks):
+        for _, chunk in enumerate(chunks):
             messages = [
                 {
                     "role": "user",
                     "content": templates.format(text=chunk)
                 }
             ]
+
+            external_build_doc_link = "https://gitee.com/openharmony-tpc/docs/blob/master/OpenHarmony_har_usage.md"
+            if do_link_include_check and external_build_doc_link.lower() in chunk.lower():
+                return build_doc_file, None
+
             result = completion_with_backoff(model='gpt-3.5-turbo', messages=messages, temperature=0.2)
             if result == "YES":
                 build_doc_file.append(document)
