@@ -520,6 +520,25 @@ def callback_func(ch, method, properties, body):
                 logging.info("api-doc-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["api-doc-checker"] = {"error":error}
 
+        elif command == 'languages-detector':
+
+            shell_script=f"""
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                if [ ! -e "$project_name" ]; then
+                    git clone {project_url} > /dev/null
+                fi
+                github-linguist $project_name --breakdown --json
+            """
+
+            result, error = shell_exec(shell_script)
+
+            if error == None:
+                logging.info("languages-detector job done: {}".format(project_url))
+                res_payload["scan_results"]["languages-detector"] = json.dumps(result.decode("utf-8")) if bool(result) else {}
+            else:
+                logging.info("languages-detector job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["languages-detector"] = {"error": json.dumps(error.decode("utf-8"))}
+
         else:
             logging.info(f"Unknown command: {command}")
 
