@@ -47,7 +47,7 @@ RUN gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A170311380
     curl -sSL https://get.rvm.io | bash -s stable && source /etc/profile.d/rvm.sh && \
     rvm install 3.1.6 && \
     apt-get update && \
-    apt-get install build-essential cmake pkg-config libicu-dev zlib1g-dev libcurl4-openssl-dev libssl-dev ruby-dev && \
+    apt-get install -y build-essential cmake pkg-config libicu-dev zlib1g-dev libcurl4-openssl-dev libssl-dev ruby-dev && \
     gem install github-linguist cocoapods && \
     echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | tee /etc/apt/sources.list.d/sbt.list && \
     echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | tee /etc/apt/sources.list.d/sbt_old.list && \
