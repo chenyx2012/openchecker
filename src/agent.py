@@ -244,7 +244,7 @@ def callback_func(ch, method, properties, body):
     shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
-                    git clone {project_url}
+                    GIT_ASKPASS=/bin/true git clone {project_url}
                 fi
             """
 
