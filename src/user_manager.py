@@ -1,5 +1,6 @@
 import uuid
 from secrets import compare_digest
+from helper import read_config
 
 class User:
     def __init__(self, id, username, password, access=['request']):
@@ -11,7 +12,8 @@ class User:
     def __str__(self):
         return f"User(id='{str(self.id)}')"
 
-userList = [User(str(uuid.uuid5(uuid.NAMESPACE_DNS, "temporary_user_id")), "temporary_user", "default_password")]
+config = read_config('config/config.ini', "UserManager")
+userList = [User(str(uuid.uuid5(uuid.NAMESPACE_DNS, config["default_username"])), config["default_username"], config["default_password"])]
 usernameTable = {u.name: u for u in userList}
 useridTable = {u.id: u for u in userList}
 
