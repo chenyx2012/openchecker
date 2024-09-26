@@ -26,6 +26,17 @@ The supported commands are:
 - api-doc-checker: Checks if the project has comprehensive API documentation.
 - languages-detector: Detects the programming languages used in the project.
 
+## API Endpoints
+- ***/test***: Requires JWT authentication. GET request returns the current authenticated user. POST request takes a JSON payload with a message field and returns a response indicating the received message.
+- ***/opencheck***: Requires JWT authentication. POST request takes a JSON payload with commands, project_url, callback_url, and task_metadata fields. Publishes a message to the RabbitMQ queue opencheck and returns a response indicating that the message has been received and the check will start.
+
+## RabbitMQ Integration
+The application includes functions for testing the RabbitMQ connection, creating queues, and publishing messages. The test_rabbitmq_connection function is used to verify the connection to RabbitMQ. The create_queue function is used to create queues with specific names and optional arguments. The publish_message function is used to publish messages to a specified queue.
+The application creates two queues: dead_letters and opencheck. The opencheck queue has an argument that sets up a dead letter exchange and routing key to route messages to the dead_letters queue in case of failure.
+
+## SSL Support
+The application can be run with SSL enabled. Set the use_ssl variable to True and provide the paths to the SSL certificate and key in the configuration file. The application will then run with SSL context specified.
+
 ## Contributing
 Contributions are welcome! Please feel free to submit pull requests or open issues if you find any bugs or have suggestions for improvements.
 
