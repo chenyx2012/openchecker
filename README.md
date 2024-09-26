@@ -2,7 +2,8 @@
 This project is a comprehensive software analysis toolset that performs various scans and checks on source code repositories.
 
 ## Overview
-The project consists of multiple Python scripts that interact with various tools and APIs to analyze different aspects of a software project. It can perform tasks such as checking for open source compliance, scanning for licenses, detecting binary files, checking release content, and more.
+The project consists of multiple modules that interact with various tools and APIs to analyze different aspects of a software project. It can perform tasks such as checking for open source compliance, scanning for licenses, detecting binary files, checking release content, and more.The architecture of the openchecker are below:
+![architecture](./docs/architecture.png)
 
 ## Installation
 1. Clone the repository.
