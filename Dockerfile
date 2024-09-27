@@ -64,4 +64,4 @@ RUN chmod a+x scripts/entrypoint.sh && \
     pip install --upgrade urllib3
 
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
-CMD ["python", "src/main.py"]
+CMD ["python", "openchecker/main.py"]
