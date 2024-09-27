@@ -53,6 +53,23 @@ class AgentRegistry:
             else:
                 print(f"Agent {agent_id} not found.")
                 
+    def set_agent_info(self, agent_id, new_info):
+        with self.lock:
+            if agent_id in self.agents:
+                self.agents[agent_id]['info'] = new_info
+                print(f"Agent {agent_id} info updated.")
+            else:
+                print(f"Agent {agent_id} not found.")
+
+    def check_agent_activity(self, agent_id):
+        with self.lock:
+            if agent_id in self.agents:
+                time_since_update = datetime.datetime.now() - self.agents[agent_id]['last_update']
+                return time_since_update.total_seconds() < 60  # Consider agent active if updated within last 60 seconds
+            else:
+                print(f"Agent {agent_id} not found.")
+                return False
+                
 if __name__ == "__main__":
     registry = AgentRegistry()
 
