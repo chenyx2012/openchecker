@@ -34,3 +34,29 @@ def authenticate(username, password):
 def identity(payload):
     userID = payload['identity']
     return useridTable.get(userID, None)
+
+def get_all_users():
+    return userList
+
+def update_user(userID, new_username=None, new_password=None, new_access=None):
+    user = indexUserWithID(userID)
+    if user:
+        if new_username:
+            user.name = new_username
+            usernameTable[new_username] = user
+            del usernameTable[user.name]
+        if new_password:
+            user.password = new_password
+        if new_access:
+            user.access = new_access
+        return True
+    return False
+
+def delete_user(userID):
+    user = indexUserWithID(userID)
+    if user:
+        userList.remove(user)
+        del usernameTable[user.name]
+        del useridTable[userID]
+        return True
+    return False
