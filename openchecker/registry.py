@@ -6,6 +6,10 @@ class AgentRegistry:
     def __init__(self):
         self.agents = {}
         self.lock = threading.Lock()
+        self.heartbeat_interval = 30  # seconds
+        self.heartbeat_thread = threading.Thread(target=self.check_heartbeats)
+        self.heartbeat_thread.daemon = True
+        self.heartbeat_thread.start()
 
     def register_agent(self, agent_id, agent_info):
         with self.lock:
@@ -69,6 +73,24 @@ class AgentRegistry:
             else:
                 print(f"Agent {agent_id} not found.")
                 return False
+            
+    def receive_heartbeat(self, agent_id):
+        with self.lock:
+            if agent_id in self.agents:
+                self.agents[agent_id]['last_update'] = datetime.datetime.now()
+                print(f"Received heartbeat from Agent {agent_id}.")
+            else:
+                print(f"Agent {agent_id} not found.")
+
+    def check_heartbeats(self):
+        while True:
+            with self.lock:
+                for agent_id, agent_data in list(self.agents.items()):
+                    time_since_update = datetime.datetime.now() - agent_data['last_update']
+                    if time_since_update.total_seconds() > self.heartbeat_interval:
+                        self.agents[agent_id]['status'] = 'inactive'
+                        print(f"Agent {agent_id} is inactive due to missed heartbeats.")
+            threading.Event().wait(self.heartbeat_interval)
                 
 if __name__ == "__main__":
     registry = AgentRegistry()
