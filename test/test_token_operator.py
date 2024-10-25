@@ -1,7 +1,7 @@
 import datetime
 import unittest
 import jwt
-from openchecker.token_operator import createTokenForUser, validate_jwt
+from token_operator import createTokenForUser, validate_jwt
 
 class TestJWTFunctions(unittest.TestCase):
 
