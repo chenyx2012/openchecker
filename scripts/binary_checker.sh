@@ -29,7 +29,7 @@ check_compressed_binary() {
 # Main script
 project_name=$(basename $1 | sed 's/\.git$//') > /dev/null
 if [ ! -e "$project_name" ]; then
-    git clone $1 > /dev/null 2>&1
+    GIT_ASKPASS=/bin/true git clone $1 > /dev/null 2>&1
 fi
 
 for file in $(find $project_name -type f -not -path '*/.git/*' -not -path '*/test/*')
