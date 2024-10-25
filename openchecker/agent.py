@@ -244,7 +244,7 @@ def callback_func(ch, method, properties, body):
     shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
-                    GIT_ASKPASS=/bin/true git clone {project_url}
+                    GIT_ASKPASS=/bin/true git clone --depth=1 {project_url}
                 fi
             """
 
@@ -263,7 +263,7 @@ def callback_func(ch, method, properties, body):
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
-                    GIT_ASKPASS=/bin/true git clone {project_url} > /dev/null
+                    GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
                 fi
                 # Outputs the results as a JSON object to stdout, with all other output being directed to stderr
                 # - this makes it safe to redirect the output to a file.
@@ -287,7 +287,7 @@ def callback_func(ch, method, properties, body):
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
-                    GIT_ASKPASS=/bin/true git clone {project_url} > /dev/null
+                    GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
                 fi
                 scancode -lc --json-pp scan_result.json $project_name --license-score 80 -n 4 > /dev/null
                 cat scan_result.json
@@ -399,7 +399,7 @@ def callback_func(ch, method, properties, body):
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
-                    GIT_ASKPASS=/bin/true git clone {project_url} > /dev/null
+                    GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
                 fi
                 cp -r $project_name ~/ && cd ~
                 sonar-scanner \
@@ -440,7 +440,7 @@ def callback_func(ch, method, properties, body):
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
-                    GIT_ASKPASS=/bin/true git clone {project_url} > /dev/null
+                    GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
                 fi
                 ort analyze -i $project_name -o $project_name -f JSON > /dev/null
                 cat $project_name/analyzer-result.json
@@ -460,7 +460,7 @@ def callback_func(ch, method, properties, body):
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
-                    GIT_ASKPASS=/bin/true git clone {project_url} > /dev/null
+                    GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
                 fi
                 find "$project_name" -type f \( -name "README*" -o -name ".github/README*" -o -name "docs/README*" \) -print
             """
@@ -479,7 +479,7 @@ def callback_func(ch, method, properties, body):
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
-                    GIT_ASKPASS=/bin/true git clone {project_url} > /dev/null
+                    GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
                 fi
                 find "$project_name" -type f \( -iname "MAINTAINERS*" -o -iname "COMMITTERS*" -o -iname "OWNERS*" -o -iname "CODEOWNERS*" \) -print
             """
@@ -525,7 +525,7 @@ def callback_func(ch, method, properties, body):
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
-                    GIT_ASKPASS=/bin/true git clone {project_url} > /dev/null
+                    GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
                 fi
                 github-linguist $project_name --breakdown --json
             """
