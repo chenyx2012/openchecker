@@ -18,10 +18,43 @@ check_compressed_binary() {
         unzip -qq -P "" "$1" -d "$temp_dir"
     elif [[ $file_type == application/x-tar ]]; then
         tar -xf "$1" -C "$temp_dir"
+    elif [[ $file_type == application/gzip ]]; then
+        gunzip -c "$1" > "$temp_dir/temp_file"
+        if [[ -f "$temp_dir/temp_file" ]]; then
+            local inner_file_type=$(file --mime-type -b "$temp_dir/temp_file")
+            if [[ $inner_file_type == application/x-tar ]]; then
+                tar -xf "$temp_dir/temp_file" -C "$temp_dir"
+            else
+                echo "Unsupported inner file type of gzip: $inner_file_type"
+                rm -rf "$temp_dir"
+                return 1
+            fi
+        else
+            echo "Error decompressing gzip file."
+            rm -rf "$temp_dir"
+            return 1
+        fi
+    elif [[ $file_type == application/x-bzip2 ]]; then
+        bunzip2 -c "$1" > "$temp_dir/temp_file"
+        if [[ -f "$temp_dir/temp_file" ]]; then
+            local inner_file_type=$(file --mime-type -b "$temp_dir/temp_file")
+            if [[ $inner_file_type == application/x-tar ]]; then
+                tar -xf "$temp_dir/temp_file" -C "$temp_dir"
+            else
+                echo "Unsupported inner file type of bzip2: $inner_file_type"
+                rm -rf "$temp_dir"
+                return 1
+            fi
+        else
+            echo "Error decompressing bzip2 file."
+            rm -rf "$temp_dir"
+            return 1
+        fi
     else
         echo "Unsupported compressed file type: $file_type"
         return 1
     fi
+
     flag=1
     for local_file in $(find $temp_dir -type f -not -path '*/.git/*')
     do
@@ -47,7 +80,8 @@ do
         continue
     fi
 
-    if [[ $(file --mime-type -b "$file") == application/zip || $(file --mime-type -b "$file") == application/x-tar ]]; then
+    local file_type=$(file --mime-type -b "$1")
+    if [[ $file_type == application/zip || $file_type == application/x-tar || $file_type == application/gzip || $file_type == application/x-bzip2 ]]; then
         if check_compressed_binary "$file"; then
             echo "Binary archive found: $file"
         fi
