@@ -564,6 +564,7 @@ def callback_func(ch, method, properties, body):
         except Exception as e:
             logging.info("Error happened when request to callback url: {}".format(e))
             logging.info("put messages to dead letters: {}".format(body))
+            logging.info("checker results: {}".format(res_payload))
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             return
 
