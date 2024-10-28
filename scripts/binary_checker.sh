@@ -12,7 +12,7 @@ is_binary() {
 # Function to check if a compressed file contains binary files
 check_compressed_binary() {
     local temp_dir=$(mktemp -d)
-    unzip -qq "$1" -d "$temp_dir"
+    unzip -qq -P "" "$1" -d "$temp_dir"
     flag=1
     for local_file in $(find $temp_dir -type f -not -path '*/.git/*')
     do
