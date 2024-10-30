@@ -257,6 +257,27 @@ def callback_func(ch, method, properties, body):
         logging.info("put messages to dead letters: {}".format(body))
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
         return
+
+    ## Generate the lock files, which would be used by the osv-scanner and ort tools.
+    shell_script=f"""
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                if [ -f "$project_name/package.json" ] && [! -f "$project_name/package-lock.json" ]; then
+                    cd $project_name && npm install > /dev/null
+                    echo "Generate lock files for $project_name with command npm."
+                fi
+                if [ -f "$project_name/oh-package.json5" ] && [! -f "$project_name/oh-package-lock.json5" ]; then
+                    cd $project_name && ohpm install > /dev/null
+                    echo "Generate lock files for $project_name with command ohpm."
+                fi
+            """
+
+    result, error = shell_exec(shell_script)
+
+    if error == None:
+        logging.info("Lock files generation job done: {}".format(result.decode('utf-8') if bool(result) else "No lock files generated."))
+    else:
+        logging.info("Lock files generation job failed: {}, error: {}".format(project_url, error))
+
     for command in command_list:
         if command == 'osv-scanner':
 
@@ -265,12 +286,23 @@ def callback_func(ch, method, properties, body):
                 if [ ! -e "$project_name" ]; then
                     GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
                 fi
+
+                # Rename oh-package-lock.json5 to package-lock.json make it readable by osv-scanner.
+                if [ -f "$project_name/oh-package-lock.json5" ] && [! -f "$project_name/package-lock.json" ]; then
+                    mv $project_name/oh-package-lock.json5 $project_name/package-lock.json  > /dev/null
+                    rename_flag = 1
+                fi
+
                 # Outputs the results as a JSON object to stdout, with all other output being directed to stderr
                 # - this makes it safe to redirect the output to a file.
                 # shell_exec function return (None, error) when process.returncode is not 0, so we redirect output to a file and cat.
                 osv-scanner --format json -r $project_name > $project_name/result.json
                 cat $project_name/result.json
                 # rm -rf $project_name > /dev/null
+
+                if [ -v rename_flag ]; then
+                    mv $project_name/package-lock.json $project_name/oh-package-lock.json5  > /dev/null
+                fi
             """
 
             result, error = shell_exec(shell_script)

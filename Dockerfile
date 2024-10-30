@@ -58,6 +58,11 @@ RUN gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A170311380
     apt-get install -y nodejs build-essential sbt && \
     npm install -g pnpm yarn bower
 
+# Install ohpm_cli_tool
+RUN cd /opt && git clone --depth=1 https://github.com/Laniakea2012/ohpm_cli_tool.git && \
+    ln -s /opt/ohpm_cli_tool/bin/ohpm /usr/bin/ohpm && \
+    ln -s /opt/ohpm_cli_tool/bin/pm-cli.js /usr/bin/pm-cli.js
+
 COPY . .
 RUN chmod a+x scripts/entrypoint.sh && \
     pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && \
