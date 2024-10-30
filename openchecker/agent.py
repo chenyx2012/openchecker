@@ -261,11 +261,11 @@ def callback_func(ch, method, properties, body):
     ## Generate the lock files, which would be used by the osv-scanner and ort tools.
     shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-                if [ -f "$project_name/package.json" ] && [! -f "$project_name/package-lock.json" ]; then
+                if [ -e "$project_name/package.json" ] && [ ! -e "$project_name/package-lock.json" ]; then
                     cd $project_name && npm install > /dev/null
                     echo "Generate lock files for $project_name with command npm."
                 fi
-                if [ -f "$project_name/oh-package.json5" ] && [! -f "$project_name/oh-package-lock.json5" ]; then
+                if [ -e "$project_name/oh-package.json5" ] && [ ! -e "$project_name/oh-package-lock.json5" ]; then
                     cd $project_name && ohpm install > /dev/null
                     echo "Generate lock files for $project_name with command ohpm."
                 fi
