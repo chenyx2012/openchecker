@@ -42,6 +42,7 @@ class OpenCheck(Resource):
         message_body = {
             "command_list": payload['commands'],
             "project_url": payload['project_url'],
+            "commit_hash": payload['commit_hash'],
             "callback_url": payload['callback_url'],
             "task_metadata": payload['task_metadata']
         }

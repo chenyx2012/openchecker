@@ -246,7 +246,7 @@ def callback_func(ch, method, properties, body):
     shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
-                    GIT_ASKPASS=/bin/true git clone --depth=1 {project_url}
+                    GIT_ASKPASS=/bin/true git clone {project_url}
                 fi
             """
 
@@ -574,9 +574,13 @@ def callback_func(ch, method, properties, body):
                 res_payload["scan_results"]["languages-detector"] = {"error": json.dumps(error.decode("utf-8"))}
 
         elif command == 'changed-files-since-commit-detector':
+            if commit_hash is None:
+                print("Fail to get commit hash from message body!")
+                break
+
             context_path = os.getcwd()
             try:
-                repository_path = os.path.join(context_path, os.path(os.path.splitext(os.path.basename(urlparse(project_url).path))[0]))
+                repository_path = os.path.join(context_path, os.path.splitext(os.path.basename(urlparse(project_url).path))[0])
                 os.chdir(repository_path)
                 print(f"change os path to git repository directory: {repository_path}")
             except OSError as e:
@@ -620,6 +624,8 @@ def callback_func(ch, method, properties, body):
 
             except subprocess.CalledProcessError as e:
                 print(f"failed to get new files: {e.output}")
+
+            os.chdir(context_path)
 
             res_payload["scan_results"]["changed-files-since-commit-detector"] = {"new_files": new_files, "modified_files": modified_files, "deleted_files": deleted_files}
 
