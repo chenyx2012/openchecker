@@ -12,6 +12,7 @@ from ghapi.all import GhApi
 import zipfile
 import io
 import logging
+from urllib.parse import urlparse
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
 
@@ -228,6 +229,7 @@ def callback_func(ch, method, properties, body):
     message = json.loads(body.decode('utf-8'))
     command_list = message.get('command_list')
     project_url = message.get('project_url')
+    commit_hash = message.get("commit_hash")
     callback_url = message.get('callback_url')
     task_metadata = message.get('task_metadata')
     logging.info(project_url)
@@ -570,6 +572,56 @@ def callback_func(ch, method, properties, body):
             else:
                 logging.info("languages-detector job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["languages-detector"] = {"error": json.dumps(error.decode("utf-8"))}
+
+        elif command == 'changed-files-since-commit-detector':
+            context_path = os.getcwd()
+            try:
+                repository_path = os.path.join(context_path, os.path(os.path.splitext(os.path.basename(urlparse(project_url).path))[0]))
+                os.chdir(repository_path)
+                print(f"change os path to git repository directory: {repository_path}")
+            except OSError as e:
+                print(f"failed to change os path to git repository directory: {e}")
+
+            try:
+                result = subprocess.check_output(
+                    ["git", "diff", "--name-only", f"{commit_hash}..HEAD"],
+                    stderr=subprocess.STDOUT,
+                    text=True
+                )
+                modified_files = result.strip().split("\n") if result else []
+            except subprocess.CalledProcessError as e:
+                print(f"failed to get modified files: {e.output}")
+                modified_files = []
+
+            try:
+                # Get the hash values of all commit records from the specified commit to HEAD.
+                commit_hashes_output = subprocess.check_output(
+                    ["git", "log", "--pretty=format:%H", f"{commit_hash}..HEAD"],
+                    stderr=subprocess.STDOUT,
+                    text=True
+                )
+                commit_hashes = commit_hashes_output.strip().split("\n")
+
+                new_files = []
+                deleted_files = []
+                for hash in commit_hashes:
+                    # For each commit, check the files it has added.
+                    result = subprocess.check_output(
+                        ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", hash],
+                        stderr=subprocess.STDOUT,
+                        text=True
+                    )
+                    files = result.strip().split("\n")
+                    for file in files:
+                        if not file.startswith("D"):
+                            new_files.append(file)
+                        else:
+                            deleted_files.append(file)
+
+            except subprocess.CalledProcessError as e:
+                print(f"failed to get new files: {e.output}")
+
+            res_payload["scan_results"]["changed-files-since-commit-detector"] = {"new_files": new_files, "modified_files": modified_files, "deleted_files": deleted_files}
 
         else:
             logging.info(f"Unknown command: {command}")
