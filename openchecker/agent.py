@@ -592,7 +592,7 @@ def callback_func(ch, method, properties, body):
             # are Unmerged (U), are Unknown (X), or have had their pairing Broken (B).
             # Reference to git official docs:
             # https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---diff-filterACDMRTUXB82308203
-            def get_diff_files(type="*"):
+            def get_diff_files(type="ACDMRTUXB"):
                 try:
                     result = subprocess.check_output(
                        ["git", "diff", "--name-only", f"--diff-filter={type}", f"{commit_hash}..HEAD"],
