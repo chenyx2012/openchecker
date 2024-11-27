@@ -1,5 +1,4 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity, pairwise_distances
 from sklearn.cluster import KMeans
 import numpy as np
 import json
@@ -20,41 +19,68 @@ def manhattan_distance(point1, point2):
     """
     return np.sum(np.abs(point1 - point2))
 
+def cosine_similarity(vector1, vector2):
+    """
+    计算余弦相似度
+    """
+    dot_product = np.dot(vector1, vector2)
+    norm_vector1 = np.linalg.norm(vector1)
+    norm_vector2 = np.linalg.norm(vector2)
+
+    if norm_vector1 == 0 or norm_vector2 == 0:
+        return 0
+
+    similarity = dot_product / (norm_vector1 * norm_vector2)
+    return similarity
+
 class KMeans:
-    def __init__(self, n_clusters=3, max_iter=100, rtol=1.e-5, atol=1.e-8, distance_func=euclidean_distance):
+    def __init__(self, n_clusters=3, max_iter=100, rtol=1.e-5, atol=1.e-8, distance_func_x=euclidean_distance, distance_func_y=cosine_similarity):
         self.n_clusters = n_clusters
         self.max_iter = max_iter
         self.rtol = rtol
         self.atol = atol
-        self.distance_func = distance_func
-        self.centroids = None
+        self.distance_func_x = distance_func_x
+        self.distance_func_y = distance_func_y
+        self.centroids_x = None
+        self.centroids_y = None
         self.clusters_with_index = None
 
-    def fit(self, X, Y=None):
-        self.centroids = X[np.random.choice(X.shape[0], self.n_clusters, replace=False)]
+    def fit(self, X, Y):
+        np.random.seed(42)
+        self.centroids_x = X[np.random.choice(X.shape[0], self.n_clusters, replace=False)]
+        self.centroids_y = Y[np.random.choice(X.shape[0], self.n_clusters, replace=False)]
 
         for _ in range(self.max_iter):
-            clusters = [[] for _ in range(self.n_clusters)]
+            clusters_x = [[] for _ in range(self.n_clusters)]
+            clusters_y = [[] for _ in range(self.n_clusters)]
             clusters_with_index = [[] for _ in range(self.n_clusters)]
             for i, point in enumerate(X):
-                distances = [self.distance_func(point, centroid) for centroid in self.centroids]
+                print(X.shape)
+                print(Y.shape)
+                distances = [self.distance_func_x(point, centroid_x) + self.distance_func_y(Y[i], centroid_y) for centroid_x, centroid_y in zip(self.centroids_x, self.centroids_y)]
                 cluster_index = np.argmin(distances)
-                clusters[cluster_index].append(point)
+                clusters_x[cluster_index].append(point)
+                clusters_y[cluster_index].append(Y[i])
                 clusters_with_index[cluster_index].append(i)
             self.clusters_with_index = clusters_with_index
 
-            prev_centroids = self.centroids.copy()
-            for i, cluster in enumerate(clusters):
+            prev_centroids_x = self.centroids_x.copy()
+            prev_centroids_y = self.centroids_y.copy()
+            for i, cluster in enumerate(clusters_x):
                 if len(cluster) > 0:
-                    self.centroids[i] = np.mean(cluster, axis=0)
+                    self.centroids_x[i] = np.mean(cluster, axis=0)
+            for i, cluster in enumerate(clusters_y):
+                if len(cluster) > 0:
+                    self.centroids_y[i] = np.mean(cluster, axis=0)
 
-            if np.allclose(self.centroids, prev_centroids, self.rtol, self.atol):
+
+            if np.allclose(self.centroids_x, prev_centroids_x, self.rtol, self.atol) and np.allclose(self.centroids_y, prev_centroids_y, self.rtol, self.atol):
                 break
 
-    def predict(self, X, Y=None):
+    def predict(self, X, Y):
         predictions = []
         for point in X:
-            distances = [self.distance_func(point, centroid) for centroid in self.centroids]
+            distances = [self.distance_func_x(point, centroid) for centroid in self.centroids_x] + [self.distance_func_y(point, centroid) for centroid in self.centroids_y]
             cluster_index = np.argmin(distances)
             predictions.append(cluster_index)
         return np.array(predictions)
@@ -91,7 +117,7 @@ if __name__ == "__main__":
                     "description": project["_source"]["description"],
                     "topics": project["_source"]["topics"],
                     "language": project["_source"]["language"]
-                 } for project in projects ]
+                 } for project in projects[:10] ]
 
 
     """" Generate feature with TF-IDF """
@@ -102,7 +128,7 @@ if __name__ == "__main__":
     project_feature_vectors = [project_to_feature_vector(project) for project in all_projects]
 
     vectorizer = TfidfVectorizer()
-    X = vectorizer.fit_transform(project_feature_vectors)
+    X = vectorizer.fit_transform(project_feature_vectors).toarray()
     # X = pairwise_distances(X, metric=cosine_similarity)
     print("X shape: ", X.shape)
     
@@ -124,7 +150,7 @@ if __name__ == "__main__":
             embedding_cache_data = json.load(f)
     
     need_vectorized_data = [ project["description"] for project in all_projects if hash(project["description"]) not in embedding_cache_data ]
-    new_embedding_cache_data = embedding_model.generate_embeddings(need_vectorized_data)
+    new_embedding_cache_data = embedding_model.generate_embeddings(need_vectorized_data).numpy().tolist()
     
     index = 0
     for project in all_projects:
@@ -135,7 +161,7 @@ if __name__ == "__main__":
             vectorized_data.append(new_embedding_cache_data[index])
             embedding_cache_data[project_id] = new_embedding_cache_data[index]
             index += 1
-            
+
     with open(cache_file_path, "w") as f:
             json.dump(embedding_cache_data, f)
             
@@ -144,8 +170,8 @@ if __name__ == "__main__":
     """"Generate clustes with K-means """
     num_clusters = 10
 
-    kmeans = KMeans(n_clusters=num_clusters, distance_func=manhattan_distance)
-    kmeans.fit(X.toarray(), vectorized_data.toarray())
+    kmeans = KMeans(n_clusters=num_clusters, distance_func_x=manhattan_distance)
+    kmeans.fit(X, np.array(vectorized_data))
 
     clusters_index = kmeans.clusters_with_index
 
