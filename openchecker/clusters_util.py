@@ -80,7 +80,7 @@ class KMeans:
     def predict(self, X, Y):
         predictions = []
         for point in X:
-            distances = [self.distance_func_x(point, centroid) for centroid in self.centroids_x] + [self.distance_func_y(point, centroid) for centroid in self.centroids_y]
+            distances = [self.distance_func_x(point, centroid_x) + self.distance_func_y(Y[i], centroid_y) for centroid_x, centroid_y in zip(self.centroids_x, self.centroids_y)]
             cluster_index = np.argmin(distances)
             predictions.append(cluster_index)
         return np.array(predictions)
