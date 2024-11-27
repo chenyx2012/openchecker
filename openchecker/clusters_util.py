@@ -117,7 +117,7 @@ if __name__ == "__main__":
                     "description": project["_source"]["description"],
                     "topics": project["_source"]["topics"],
                     "language": project["_source"]["language"]
-                 } for project in projects[:10] ]
+                 } for project in projects ]
 
 
     """" Generate feature with TF-IDF """
