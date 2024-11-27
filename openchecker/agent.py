@@ -608,10 +608,48 @@ def callback_func(ch, method, properties, body):
                 print(f"failed to get new files: {e.output}")
                 new_files = []
 
+            try:
+                result = subprocess.check_output(
+                    ["git", "diff", "--name-only", "--diff-filter=R", f"{commit_hash}..HEAD"],
+                    stderr=subprocess.STDOUT,
+                    text=True
+                )
+                new_files = result.strip().split("\n") if result else []
+            except subprocess.CalledProcessError as e:
+                print(f"failed to get rename files: {e.output}")
+                rename_files = []
+
+            try:
+                result = subprocess.check_output(
+                    ["git", "diff", "--name-only", "--diff-filter=D", f"{commit_hash}..HEAD"],
+                    stderr=subprocess.STDOUT,
+                    text=True
+                )
+                new_files = result.strip().split("\n") if result else []
+            except subprocess.CalledProcessError as e:
+                print(f"failed to get deleted files: {e.output}")
+                deleted_files = []
+
+            try:
+                result = subprocess.check_output(
+                    ["git", "diff", "--name-only", "--diff-filter=M", f"{commit_hash}..HEAD"],
+                    stderr=subprocess.STDOUT,
+                    text=True
+                )
+                new_files = result.strip().split("\n") if result else []
+            except subprocess.CalledProcessError as e:
+                print(f"failed to get modified files: {e.output}")
+                modified_files = []
+
             os.chdir(context_path)
 
-            res_payload["scan_results"]["changed-files-since-commit-detector"] = {"changed_files": changed_files, "new_files": new_files}
-            print(res_payload["scan_results"]["changed-files-since-commit-detector"])
+            res_payload["scan_results"]["changed-files-since-commit-detector"] = {
+                "changed_files": changed_files,
+                "new_files": new_files,
+                "rename_files": rename_files,
+                "deleted_files": deleted_files,
+                "modified_files": modified_files
+                }
 
         else:
             logging.info(f"Unknown command: {command}")
