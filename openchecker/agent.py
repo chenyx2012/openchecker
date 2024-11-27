@@ -592,42 +592,26 @@ def callback_func(ch, method, properties, body):
                     stderr=subprocess.STDOUT,
                     text=True
                 )
-                modified_files = result.strip().split("\n") if result else []
+                changed_files = result.strip().split("\n") if result else []
             except subprocess.CalledProcessError as e:
-                print(f"failed to get modified files: {e.output}")
-                modified_files = []
+                print(f"failed to get changed files: {e.output}")
+                changed_files = []
 
             try:
-                # Get the hash values of all commit records from the specified commit to HEAD.
-                commit_hashes_output = subprocess.check_output(
-                    ["git", "log", "--pretty=format:%H", f"{commit_hash}..HEAD"],
+                result = subprocess.check_output(
+                    ["git", "diff", "--name-only", "--diff-filter=A", f"{commit_hash}..HEAD"],
                     stderr=subprocess.STDOUT,
                     text=True
                 )
-                commit_hashes = commit_hashes_output.strip().split("\n")
-
-                new_files = []
-                deleted_files = []
-                for hash in commit_hashes:
-                    # For each commit, check the files it has added.
-                    result = subprocess.check_output(
-                        ["git", "diff-tree", "--no-commit-id", "--name-only", "-r", hash],
-                        stderr=subprocess.STDOUT,
-                        text=True
-                    )
-                    files = result.strip().split("\n")
-                    for file in files:
-                        if not file.startswith("D"):
-                            new_files.append(file)
-                        else:
-                            deleted_files.append(file)
-
+                new_files = result.strip().split("\n") if result else []
             except subprocess.CalledProcessError as e:
                 print(f"failed to get new files: {e.output}")
+                new_files = []
 
             os.chdir(context_path)
 
-            res_payload["scan_results"]["changed-files-since-commit-detector"] = {"new_files": new_files, "modified_files": modified_files, "deleted_files": deleted_files}
+            res_payload["scan_results"]["changed-files-since-commit-detector"] = {"changed_files": changed_files, "new_files": new_files}
+            print(res_payload["scan_results"]["changed-files-since-commit-detector"])
 
         else:
             logging.info(f"Unknown command: {command}")
