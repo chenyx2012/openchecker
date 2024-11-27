@@ -586,60 +586,29 @@ def callback_func(ch, method, properties, body):
             except OSError as e:
                 print(f"failed to change os path to git repository directory: {e}")
 
-            try:
-                result = subprocess.check_output(
-                    ["git", "diff", "--name-only", f"{commit_hash}..HEAD"],
-                    stderr=subprocess.STDOUT,
-                    text=True
-                )
-                changed_files = result.strip().split("\n") if result else []
-            except subprocess.CalledProcessError as e:
-                print(f"failed to get changed files: {e.output}")
-                changed_files = []
+            # type can be: [(A|C|D|M|R|T|U|X|B)…​[*]]
+            # Added (A), Copied (C), Deleted (D), Modified (M), Renamed (R),
+            # have their type (i.e. regular file, symlink, submodule, …​) changed (T),
+            # are Unmerged (U), are Unknown (X), or have had their pairing Broken (B).
+            # Reference to git official docs:
+            # https://git-scm.com/docs/git-diff#Documentation/git-diff.txt---diff-filterACDMRTUXB82308203
+            def get_diff_files(type="*"):
+                try:
+                    result = subprocess.check_output(
+                       ["git", "diff", "--name-only", f"--diff-filter={type}", f"{commit_hash}..HEAD"],
+                        stderr=subprocess.STDOUT,
+                        text=True
+                    )
+                    return result.strip().split("\n") if result else []
+                except subprocess.CalledProcessError as e:
+                    print(f"failed to get {type} files: {e.output}")
+                    return []
 
-            try:
-                result = subprocess.check_output(
-                    ["git", "diff", "--name-only", "--diff-filter=A", f"{commit_hash}..HEAD"],
-                    stderr=subprocess.STDOUT,
-                    text=True
-                )
-                new_files = result.strip().split("\n") if result else []
-            except subprocess.CalledProcessError as e:
-                print(f"failed to get new files: {e.output}")
-                new_files = []
-
-            try:
-                result = subprocess.check_output(
-                    ["git", "diff", "--name-only", "--diff-filter=R", f"{commit_hash}..HEAD"],
-                    stderr=subprocess.STDOUT,
-                    text=True
-                )
-                new_files = result.strip().split("\n") if result else []
-            except subprocess.CalledProcessError as e:
-                print(f"failed to get rename files: {e.output}")
-                rename_files = []
-
-            try:
-                result = subprocess.check_output(
-                    ["git", "diff", "--name-only", "--diff-filter=D", f"{commit_hash}..HEAD"],
-                    stderr=subprocess.STDOUT,
-                    text=True
-                )
-                new_files = result.strip().split("\n") if result else []
-            except subprocess.CalledProcessError as e:
-                print(f"failed to get deleted files: {e.output}")
-                deleted_files = []
-
-            try:
-                result = subprocess.check_output(
-                    ["git", "diff", "--name-only", "--diff-filter=M", f"{commit_hash}..HEAD"],
-                    stderr=subprocess.STDOUT,
-                    text=True
-                )
-                new_files = result.strip().split("\n") if result else []
-            except subprocess.CalledProcessError as e:
-                print(f"failed to get modified files: {e.output}")
-                modified_files = []
+            changed_files = get_diff_files()
+            new_files = get_diff_files("A")
+            rename_files = get_diff_files("R")
+            deleted_files = get_diff_files("D")
+            modified_files = get_diff_files("M")
 
             os.chdir(context_path)
 
