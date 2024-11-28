@@ -1,5 +1,5 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.cluster import KMeans
+# from sklearn.cluster import KMeans
 import numpy as np
 import json
 import os
@@ -34,7 +34,7 @@ def cosine_similarity(vector1, vector2):
     return similarity
 
 class KMeans:
-    def __init__(self, n_clusters=3, max_iter=100, rtol=1.e-5, atol=1.e-8, distance_func_x=euclidean_distance, distance_func_y=cosine_similarity):
+    def __init__(self, n_clusters=3, max_iter=200, rtol=1.e-5, atol=1.e-8, distance_func_x=euclidean_distance, distance_func_y=cosine_similarity):
         self.n_clusters = n_clusters
         self.max_iter = max_iter
         self.rtol = rtol
@@ -46,7 +46,7 @@ class KMeans:
         self.clusters_with_index = None
 
     def fit(self, X, Y):
-        np.random.seed(42)
+        np.random.seed(self.n_clusters)
         self.centroids_x = X[np.random.choice(X.shape[0], self.n_clusters, replace=False)]
         self.centroids_y = Y[np.random.choice(X.shape[0], self.n_clusters, replace=False)]
 
@@ -55,9 +55,8 @@ class KMeans:
             clusters_y = [[] for _ in range(self.n_clusters)]
             clusters_with_index = [[] for _ in range(self.n_clusters)]
             for i, point in enumerate(X):
-                print(X.shape)
-                print(Y.shape)
-                distances = [self.distance_func_x(point, centroid_x) + self.distance_func_y(Y[i], centroid_y) for centroid_x, centroid_y in zip(self.centroids_x, self.centroids_y)]
+                print([ self.distance_func_x(point, centroid_x) for centroid_x in self.centroids_x ], " VS ", [ self.distance_func_y(Y[i], centroid_y) for centroid_y in self.centroids_y ])
+                distances = [self.distance_func_x(point, centroid_x)/10.0 + self.distance_func_y(Y[i], centroid_y) for centroid_x, centroid_y in zip(self.centroids_x, self.centroids_y)]
                 cluster_index = np.argmin(distances)
                 clusters_x[cluster_index].append(point)
                 clusters_y[cluster_index].append(Y[i])
@@ -170,7 +169,7 @@ if __name__ == "__main__":
     """"Generate clustes with K-means """
     num_clusters = 10
 
-    kmeans = KMeans(n_clusters=num_clusters, distance_func_x=manhattan_distance)
+    kmeans = KMeans(n_clusters=num_clusters)
     kmeans.fit(X, np.array(vectorized_data))
 
     clusters_index = kmeans.clusters_with_index
@@ -182,21 +181,3 @@ if __name__ == "__main__":
 
     for i, project in enumerate(all_projects):
         print(f"Project {i}: {project['description']}, Cluster ID: {project['cluster_id']}")
-
-    # Visulation
-    # colors = plt.cm.get_cmap('Set1', num_clusters)
-
-    # for i, project in enumerate(all_projects):
-    #     vector = np.array(X[i])
-    #     cluster_id = project["cluster_id"]
-    #     color = colors(cluster_id)
-
-    #     plt.scatter(range(vec)), vector, c=color, label=f"Cluster {cluster_id}: {project['project_name']}")
-
-    # plt.legend()
-
-    # plt.title("Projects Visualization based on Vectors")
-    # plt.xlabel("Vector Position")
-    # plt.ylabel("Vector Value")
-
-    # plt.show()
