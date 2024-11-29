@@ -34,7 +34,7 @@ def cosine_similarity(vector1, vector2):
     return similarity
 
 class KMeans:
-    def __init__(self, n_clusters=3, max_iter=200, rtol=1.e-5, atol=1.e-8, distance_func_x=euclidean_distance, distance_func_y=cosine_similarity):
+    def __init__(self, n_clusters=3, max_iter=500, rtol=1.e-5, atol=1.e-8, distance_func_x=euclidean_distance, distance_func_y=cosine_similarity):
         self.n_clusters = n_clusters
         self.max_iter = max_iter
         self.rtol = rtol
@@ -44,6 +44,7 @@ class KMeans:
         self.centroids_x = None
         self.centroids_y = None
         self.clusters_with_index = None
+        self.inertia_ = 0
 
     def fit(self, X, Y):
         np.random.seed(self.n_clusters)
@@ -55,7 +56,7 @@ class KMeans:
             clusters_y = [[] for _ in range(self.n_clusters)]
             clusters_with_index = [[] for _ in range(self.n_clusters)]
             for i, point in enumerate(X):
-                print([ self.distance_func_x(point, centroid_x) for centroid_x in self.centroids_x ], " VS ", [ self.distance_func_y(Y[i], centroid_y) for centroid_y in self.centroids_y ])
+                # print([ self.distance_func_x(point, centroid_x) for centroid_x in self.centroids_x ], " VS ", [ self.distance_func_y(Y[i], centroid_y) for centroid_y in self.centroids_y ])
                 distances = [self.distance_func_x(point, centroid_x)/10.0 + self.distance_func_y(Y[i], centroid_y) for centroid_x, centroid_y in zip(self.centroids_x, self.centroids_y)]
                 cluster_index = np.argmin(distances)
                 clusters_x[cluster_index].append(point)
@@ -72,17 +73,40 @@ class KMeans:
                 if len(cluster) > 0:
                     self.centroids_y[i] = np.mean(cluster, axis=0)
 
-
             if np.allclose(self.centroids_x, prev_centroids_x, self.rtol, self.atol) and np.allclose(self.centroids_y, prev_centroids_y, self.rtol, self.atol):
                 break
 
+        self.inertia_ = 0
+        for i, cluster_x in enumerate(clusters_x):
+                for j, point in enumerate(cluster_x):
+                    self.inertia_ += (self.distance_func_x(point, self.centroids_x[i])/10.0 + self.distance_func_y(Y[self.clusters_with_index[i][j]], self.centroids_y[i]))
+
     def predict(self, X, Y):
         predictions = []
-        for point in X:
-            distances = [self.distance_func_x(point, centroid_x) + self.distance_func_y(Y[i], centroid_y) for centroid_x, centroid_y in zip(self.centroids_x, self.centroids_y)]
+        for i, point in enumerate(X):
+            distances = [self.distance_func_x(point, centroid_x)/10.0 + self.distance_func_y(Y[i], centroid_y) for centroid_x, centroid_y in zip(self.centroids_x, self.centroids_y)]
             cluster_index = np.argmin(distances)
             predictions.append(cluster_index)
         return np.array(predictions)
+
+def calculate_inertia(X, Y, n_clusters_list):
+    inertias = []
+    for n_clusters in n_clusters_list:
+        kmeans = KMeans(n_clusters=n_clusters)
+        kmeans.fit(X, np.array(Y))
+        inertias.append(kmeans.inertia_)
+
+        print(f"-------Results of K-Means with configurations: n_clusters({n_clusters}), max_iter({kmeans.max_iter})-------")
+        clusters_index = kmeans.clusters_with_index
+        for i, cluster_index in enumerate(clusters_index):
+            for index in cluster_index:
+                all_projects[index]["cluster_id"] = i
+                print(f"cluster {i}: project_name: {all_projects[index]['name']} description: {all_projects[index]['description']}")
+                
+        for i, project in enumerate(all_projects):
+            print(f"Project {i}: {project['description']}, Cluster ID: {project['cluster_id']}")
+
+    return inertias
 
 if __name__ == "__main__":
 
@@ -116,7 +140,7 @@ if __name__ == "__main__":
                     "description": project["_source"]["description"],
                     "topics": project["_source"]["topics"],
                     "language": project["_source"]["language"]
-                 } for project in projects ]
+                 } for project in projects[:1000] ]
 
 
     """" Generate feature with TF-IDF """
@@ -166,18 +190,16 @@ if __name__ == "__main__":
             
     print("Y shape: ", len(vectorized_data))
     
-    """"Generate clustes with K-means """
-    num_clusters = 10
+    """" Determine the appropriate setting of n_cluster using the elbow method. """
+    n_clusters_list = range(10, 11)
 
-    kmeans = KMeans(n_clusters=num_clusters)
-    kmeans.fit(X, np.array(vectorized_data))
+    inertias = calculate_inertia(X, vectorized_data, n_clusters_list)
 
-    clusters_index = kmeans.clusters_with_index
+    plt.plot(n_clusters_list, inertias)
+    plt.xlabel('Number of Clusters')
+    plt.ylabel('Inertia')
+    plt.title('Elbow Method For Optimal k')
+    save_path = "/home/guoqiang/opencheck/test/elbow_method2.png"
+    plt.savefig(save_path)
 
-    for i, cluster_index in enumerate(clusters_index):
-        for index in cluster_index:
-            all_projects[index]["cluster_id"] = i
-            print(f"cluster {i}: project_name: {all_projects[index]['name']} description: {all_projects[index]['description']}")
-
-    for i, project in enumerate(all_projects):
-        print(f"Project {i}: {project['description']}, Cluster ID: {project['cluster_id']}")
+    plt.show()
