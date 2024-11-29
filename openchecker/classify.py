@@ -47,7 +47,7 @@ if __name__ == "__main__":
     project_schema = """[{
             "project_name": "具体开源项目名称",
             "assigned_first_level_category": "划分到的一级类别名称，如果是新建类别则在此处明确写出新建的类别名称",
-            "assigned_secondary_level_category": "划分到的二级类别名称，如果是新建类别则在此处明确写出新建的类别名称",
+            "assigned_second_level_category": "划分到的二级类别名称，如果是新建类别则在此处明确写出新建的类别名称",
             }]"""
 
     system_message = {
@@ -78,14 +78,14 @@ if __name__ == "__main__":
         
         try:
             llm_result = json.loads(llm.non_streaming_chat(messages))
-            first_category, second_category = [res['assigned_first_level_category']  for res in llm_result], [res['assigned_secondary_level_category'] for res in llm_result]
+            first_category, second_category = [res['assigned_first_level_category']  for res in llm_result], [res['assigned_second_level_category'] for res in llm_result]
         except Exception as e:
             print("Failed to category: ", project['name'], e)
             print(llm_result)
             first_category, second_category = '', ''
             
         project["assigned_first_level_category"] = first_category
-        project['assigned_secondary_level_category'] = second_category
+        project['assigned_second_level_category'] = second_category
         
         result_projects.append(project)
 
