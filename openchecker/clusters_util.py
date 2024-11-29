@@ -3,7 +3,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 import json
 import os
-from embedding import SentenceEmbeddingGenerator
+from llm import SentenceEmbeddingGenerator
 import matplotlib.pyplot as plt
 
 def euclidean_distance(point1, point2):
