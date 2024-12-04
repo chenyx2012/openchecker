@@ -264,11 +264,11 @@ def callback_func(ch, method, properties, body):
     shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ -e "$project_name/package.json" ] && [ ! -e "$project_name/package-lock.json" ]; then
-                    cd $project_name && npm install > /dev/null
+                    cd $project_name && npm install && rm -fr node_modules > /dev/null
                     echo "Generate lock files for $project_name with command npm."
                 fi
                 if [ -e "$project_name/oh-package.json5" ] && [ ! -e "$project_name/oh-package-lock.json5" ]; then
-                    cd $project_name && ohpm install > /dev/null
+                    cd $project_name && ohpm install && rm -fr oh_modules > /dev/null
                     echo "Generate lock files for $project_name with command ohpm."
                 fi
             """
