@@ -6,6 +6,8 @@ from elasticsearch import Elasticsearch, RequestsHttpConnection
 import logging
 import time
 import urllib3
+import json
+import logging
 
 logger = logging.getLogger(__name__)
 urllib3.disable_warnings()
@@ -56,7 +58,7 @@ def free_scroll(client, scroll_id=None):
             logger.debug("Error releasing scroll: {}", scroll_id)
 
 
-def get_items(client, index, body, size, scroll_id=None, scroll="5m"):
+def get_items(client, index, body, size, scroll_id=None, scroll="10m"):
         page = None
         try:
             if scroll_id is None:
@@ -111,11 +113,12 @@ def get_generator(client, body, index=None):
         free_scroll(client, scroll_id)
 
 if __name__ == '__main__':
-    opensearch_url = ""
+    opensearch_url = "https://admin:opensearch@192.168.0.239:8200"
     repo_index = "github_event_repository"
     
     body = {
-        "_source": ["name", "html_url", "description", "topics", "language"],
+        # "_source": ["name", "html_url", "description", "topics", "language"],
+        "_source": ["name", "html_url", "description", "topics"],
         "query": {
             "bool": {
                 "must": [
@@ -124,11 +127,11 @@ if __name__ == '__main__':
                             "field": "topics"
                         }
                     },
-                    {
-                        "exists": {
-                            "field": "language"
-                        }
-                    },
+                    # {
+                    #     "exists": {
+                    #         "field": "language"
+                    #     }
+                    # },
                     {
                         "exists": {
                             "field": "description"
@@ -137,8 +140,36 @@ if __name__ == '__main__':
                 ]
             }
         },
-        "size": 100
+        "size": 10
     }
     repo_generator = get_generator(get_elasticsearch_client(opensearch_url), body, repo_index)
+    
+    count = 0
+    projects = []
     for repo_item in repo_generator:
-        print(repo_item)
+        count += 1
+
+        project = {
+                "name": repo_item["_source"]["name"], 
+                "description": repo_item["_source"]["description"],
+                "topics": repo_item["_source"]["topics"],
+                # "language": repo_item["_source"]["language"],
+                "html_url": repo_item["_source"]["html_url"], 
+                }
+
+        projects.append(project)
+
+        if count % 10000 == 0:
+            file_index = count / 10000
+            result_projects_file_path = f"/home/guoqiang/opencheck/test/projects/all_projects_part_{file_index}.json"
+            with open(result_projects_file_path, 'w', encoding='utf-8') as f:
+                json.dump(projects, f, ensure_ascii=True)
+                logging.info("write back to: ", result_projects_file_path)
+
+            projects = []
+            
+    result_projects_file_path = "/home/guoqiang/opencheck/test/projects/all_projects_part_end.json"
+    with open(result_projects_file_path, 'w', encoding='utf-8') as f:
+        json.dump(projects, f, ensure_ascii=True)
+        logging.info("write back to: ", result_projects_file_path)
+    

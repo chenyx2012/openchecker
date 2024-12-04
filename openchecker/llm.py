@@ -1,6 +1,52 @@
 from transformers import AutoTokenizer, AutoModel
 import torch
+import openai, time, random
 from openai import OpenAI
+import os
+
+def retry_with_exponential_backoff(
+    func,
+    initial_delay: float = 2,
+    exponential_base: float = 2,
+    jitter: bool = False,
+    max_retries: int = 10,
+    errors: tuple = (openai.RateLimitError, openai.APIError, openai.Timeout, openai.APIConnectionError, openai.InternalServerError),
+):
+    """Retry a function with exponential backoff."""
+ 
+    def wrapper(*args, **kwargs):
+        # Initialize variables
+        num_retries = 0
+        delay = initial_delay
+ 
+        # Loop until a successful response or max_retries is hit or an exception is raised
+        while True:
+            try:
+                return func(*args, **kwargs)
+ 
+            # Retry on specific errors
+            except Exception as e:
+                # Increment retries
+                num_retries += 1
+ 
+                # Check if max retries has been reached
+                if num_retries > max_retries:
+                    raise Exception(
+                        f"Maximum number of retries ({max_retries}) exceeded."
+                    )
+ 
+                # Increment the delay
+                delay *= exponential_base
+ 
+                # Sleep for the delay
+                print("sleep: ", delay, " s")
+                time.sleep(delay)
+ 
+            # # Raise exceptions for any errors not specified
+            # except Exception as e:
+            #     print(e)
+ 
+    return wrapper
 
 class SentenceEmbeddingGenerator:
     def __init__(self, model_path):
@@ -34,9 +80,6 @@ class SentenceEmbeddingGenerator:
 
         return sentence_embeddings
 
-import os
-from openai import OpenAI
-
 class ChatCompletionHandler:
     def __init__(self, model_name = "gpt3.5-turbo", base_url = f"https://api.openai.com/v1"):
         if "openai.com" in base_url:
@@ -52,6 +95,7 @@ class ChatCompletionHandler:
         )
         self.model = model_name
 
+    @retry_with_exponential_backoff
     def non_streaming_chat(self, messages):
         completion = self.client.chat.completions.create(
             model=self.model,
