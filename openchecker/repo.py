@@ -112,10 +112,35 @@ def get_generator(client, body, index=None):
             scroll_size = len(page['hits']['hits'])
         free_scroll(client, scroll_id)
 
+def check_repo_china(client, repo):
+    repo_tz_index = "github_event_repository_enrich"
+    repo_tz_body = {
+        "query": {
+            "bool": {
+                "must": [
+                    {
+                        "match_phrase": {
+                            "tz_detail_list.tz": 8
+                        }
+                    },
+                    {
+                        "match_phrase": {
+                            "repo.keyword": repo
+                        }
+                    }
+                ]
+            }
+        },
+        "size": 1
+    }
+    hits = client.search(index=repo_tz_index, body=repo_tz_body)['hits']['hits']
+    return len(hits) > 0
+
 if __name__ == '__main__':
-    opensearch_url = "https://admin:opensearch@192.168.0.239:8200"
+    opensearch_url = ""
     repo_index = "github_event_repository"
     
+    ''' 
     body = {
         # "_source": ["name", "html_url", "description", "topics", "language"],
         "_source": ["name", "html_url", "description", "topics"],
@@ -173,3 +198,10 @@ if __name__ == '__main__':
         json.dump(projects, f, ensure_ascii=True)
         logging.info("write back to: ", result_projects_file_path)
     
+    '''
+    
+    
+    client = get_elasticsearch_client(opensearch_url)
+    repo = "https://github.com/dgrammatiko/wysiwyg-tinymce-j4.1"
+    
+    print(check_repo_china(client, repo))
