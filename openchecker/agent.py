@@ -620,6 +620,64 @@ def callback_func(ch, method, properties, body):
                 "modified_files": modified_files
                 }
 
+        elif command == 'oat-scanner':
+            shell_script = f"""
+                             project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                             if [ ! -e "$project_name" ]; then
+                                 GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
+                             fi
+                             java -jar ohos_ossaudittool-2.0.0.jar -mode s -s $project_name   -r $project_name/oat_out -n $project_name > /dev/null            
+                             report_file="$project_name/oat_out/single/PlainReport_$project_name.txt"
+                             if [ -f "$report_file" ]; then                    
+                                 cat "$report_file"                                    
+                             fi                        
+                         """
+            result, error = shell_exec(shell_script)
+
+            def parse_oat_txt_to_json(txt):
+                try:
+                    de_str = txt.decode('unicode_escape')
+                    result = {}
+                    lines = de_str.splitlines()
+                    current_section = None
+                    pattern = r"Name:\s*(.+?)\s*Content:\s*(.+?)\s*Line:\s*(\d+)\s*Project:\s*(.+?)\s*File:\s*(.+)"
+
+                    for line in lines:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        total_count_match = re.search(r"^(.*) Total Count:\s*(\d+)", line, re.MULTILINE)
+                        category_name = total_count_match.group(1).strip() if total_count_match else "Unknown"
+
+                        if 'Total Count' in line:
+                            current_section = category_name
+                            total_count = int(line.split(":")[1].strip())
+                            result[current_section] = {"total_count": total_count, "details": []}
+                        elif line.startswith("Name:"):
+                            matches = re.finditer(pattern, line)
+                            for match in matches:
+                                entry = {
+                                    "name": match.group(1).strip(),
+                                    "content": match.group(2).strip(),
+                                    "line": int(match.group(3).strip()),
+                                    "project": match.group(4).strip(),
+                                    "file": match.group(5).strip(),
+                                }
+                            if current_section and "details" in result[current_section]:
+                                result[current_section]["details"].append(entry)
+                    return result
+                except Exception as e:
+                    logging.info("parse_oat_txt error: {}".format(e))
+                    return e
+
+            if error == None:
+                logging.info("oat-scanner job done: {}".format(project_url))
+                parse_result = parse_oat_txt_to_json(result)
+                res_payload["scan_results"]["oat-scanner"] = parse_result
+            else:
+                logging.info("oat-scanner job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["oat-scanner"] = {"error": json.dumps(error.decode("utf-8"))}
+
         else:
             logging.info(f"Unknown command: {command}")
 
