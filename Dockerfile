@@ -4,6 +4,13 @@ WORKDIR /app
 RUN apk update && \
     apk add osv-scanner
 
+FROM maven:3.6.3-openjdk-11-slim As oat_builder
+WORKDIR /app
+# Install oat_tool 
+Run apt update && apt install -y git && \ 
+    git clone https://gitee.com/openharmony-sig/tools_oat.git && \
+    cd tools_oat && git checkout tags/v2.0.0 && mvn package
+
 # FROM golang:latest
 # WORKDIR /app
 # RUN go install github.com/google/osv-scanner/cmd/osv-scanner@v1
@@ -14,6 +21,8 @@ WORKDIR /app
 # Copy osv-scanner binary
 COPY --from=osv-scanner-builder /usr/bin/osv-scanner /usr/bin/osv-scanner
 COPY --from=osv-scanner-builder /lib/ld-musl-x86_64.so.1 /lib/ld-musl-x86_64.so.1
+COPY --from=oat_builder /app/tools_oat/target/ohos_ossaudittool-2.0.0.jar /app/ohos_ossaudittool-2.0.0.jar
+COPY --from=oat_builder /app/tools_oat/target/libs /app/libs
 RUN ln -s /lib/ld-musl-x86_64.so.1 /lib/libc.musl-x86_64.so.1
 
 # Install scancode
