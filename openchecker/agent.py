@@ -621,17 +621,22 @@ def callback_func(ch, method, properties, body):
                 }
 
         elif command == 'oat-scanner':
+            # https://gitee.com/openharmony-sig/tools_oat
             shell_script = f"""
-                             project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-                             if [ ! -e "$project_name" ]; then
-                                 GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
-                             fi
-                             java -jar ohos_ossaudittool-2.0.0.jar -mode s -s $project_name   -r $project_name/oat_out -n $project_name > /dev/null            
-                             report_file="$project_name/oat_out/single/PlainReport_$project_name.txt"
-                             if [ -f "$report_file" ]; then                    
-                                 cat "$report_file"                                    
-                             fi                        
-                         """
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                if [ ! -e "$project_name" ]; then
+                    GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
+                fi                
+                if [ ! -f "$project_name/OAT.xml" ]; then
+                    echo "OAT.xml not found in the project root directory."
+                    exit 1   
+                fi
+                java -jar ohos_ossaudittool-2.0.0.jar -mode s -s $project_name   -r $project_name/oat_out -n $project_name > /dev/null            
+                report_file="$project_name/oat_out/single/PlainReport_$project_name.txt"
+                if [ -f "$report_file" ]; then                    
+                    cat "$report_file"                                    
+                fi                        
+            """
             result, error = shell_exec(shell_script)
 
             def parse_oat_txt_to_json(txt):
@@ -670,14 +675,26 @@ def callback_func(ch, method, properties, body):
                     logging.info("parse_oat_txt error: {}".format(e))
                     return e
 
-            if error == None:
-                logging.info("oat-scanner job done: {}".format(project_url))
-                parse_result = parse_oat_txt_to_json(result)
-                res_payload["scan_results"]["oat-scanner"] = parse_result
+            res_payload["scan_results"]["oat-scanner"] = {}
+            if not result:
+                logging.info("{} OAT.xml not found".format(project_url))
+                # OAT.xml not found status_code: 404, success code:200, error code:500
+                res_payload["scan_results"]["oat-scanner"] = {
+                    "status_code": 404,
+                    "error": "OAT.xml not found"
+                }
             else:
-                logging.info("oat-scanner job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["oat-scanner"] = {"error": json.dumps(error.decode("utf-8"))}
-
+                parse_res = parse_oat_txt_to_json(result)
+                if error is None:
+                    logging.info("oat-scanner job done: {}".format(project_url))
+                    res_payload["scan_results"]["oat-scanner"] = parse_res
+                    res_payload["scan_results"]["oat-scanner"]["status_code"] = 200
+                else:
+                    logging.info("oat-scanner job failed: {}, error: {}".format(project_url, error))
+                    res_payload["scan_results"]["oat-scanner"] = {
+                        "status_code": 500,
+                        "error": json.dumps(error.decode("utf-8"))
+                    }
         else:
             logging.info(f"Unknown command: {command}")
 
