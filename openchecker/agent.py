@@ -638,6 +638,11 @@ def callback_func(ch, method, properties, body):
                 fi                        
             """
             result, error = shell_exec(shell_script)
+            
+            if error == None:
+                logging.info("The oat scan was successful. Analyzing the report.: {}".format(project_url))
+            else:
+                logging.info("oat-scanner job failed: {}, error: {}".format(project_url, error))
 
             def parse_oat_txt_to_json(txt):
                 try:
