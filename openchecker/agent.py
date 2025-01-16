@@ -476,7 +476,7 @@ def callback_func(ch, method, properties, body):
                 if [ ! -e "$project_name" ]; then
                     GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
                 fi
-                ort analyze -i $project_name -o $project_name -f JSON > /dev/null
+                ort -P ort.analyzer.allowDynamicVersions=true analyze -i $project_name -o $project_name -f JSON > /dev/null
                 cat $project_name/analyzer-result.json
                 # rm -rf $project_name > /dev/null
             """
