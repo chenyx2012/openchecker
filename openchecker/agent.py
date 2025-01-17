@@ -167,7 +167,7 @@ def check_doc_content(project_url, type):
             if do_link_include_check and external_build_doc_link.lower() in chunk.lower():
                 return build_doc_file, None
 
-            result = completion_with_backoff(model='gpt-3.5-turbo', messages=messages, temperature=0.2)
+            result = completion_with_backoff(messages=messages, temperature=0.2)
             if result == "YES":
                 build_doc_file.append(document)
                 return build_doc_file, None
