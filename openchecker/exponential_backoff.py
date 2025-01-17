@@ -66,6 +66,6 @@ def completion_with_backoff(**kwargs):
     )
 
     # chat_completion = client.chat.completions.create(model=model, messages=messages)
-    chat_completion = client.chat.completions.create(**kwargs)
+    chat_completion = client.chat.completions.create(model=chatbot_config["model_name"] ,**kwargs)
 
     return chat_completion.choices[0].message.content
