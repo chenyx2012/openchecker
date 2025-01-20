@@ -576,7 +576,7 @@ def callback_func(ch, method, properties, body):
         elif command == 'changed-files-since-commit-detector':
             if commit_hash is None:
                 print("Fail to get commit hash from message body!")
-                break
+                continue
 
             context_path = os.getcwd()
             try:
