@@ -1,6 +1,6 @@
 import pika
 from helper import read_config
-import logging
+import logging, time
 
 def test_rabbitmq_connection(config):
     credentials = pika.PlainCredentials(config['username'], config['password'])
@@ -54,17 +54,27 @@ def consumer(config, queue_name, callback_func):
     credentials = pika.PlainCredentials(config['username'], config['password'])
     parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials, heartbeat=config['heartbeat_interval_s'], blocked_connection_timeout=config['blocked_connection_timeout_ms'])
 
-    try:
-        connection = pika.BlockingConnection(parameters)
-        channel = connection.channel()
-        channel.basic_qos(prefetch_count=1)
-        channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=False)
-        logging.info('Consumer connected, wating for messages...')
-        channel.start_consuming()
-
-    except Exception as e:
-        logging.info("Consumer failed as: {}".format(e))
-        return str(e)
+    while True:
+        try:
+            connection = pika.BlockingConnection(parameters)
+            channel = connection.channel()
+            channel.basic_qos(prefetch_count=1)
+            channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=False)
+            logging.info('Consumer connected, wating for messages...')
+            channel.start_consuming()
+        except pika.exceptions.ConnectionClosedByBroker as e:
+            logging.error(f"Connection closed by broker: {e}")
+            logging.info(f"retrying")
+            time.sleep(60)
+            continue
+        except pika.exceptions.AMQPChannelError as e:
+            logging.error(f"AMQP channel error: {e}")
+            logging.info(f"retrying")
+            time.sleep(60)
+            continue
+        except Exception as e:
+            logging.info(f"Consumer failed as: {e}")
+            return str(e)
 
 def check_queue_status(config, queue_name):
     credentials = pika.PlainCredentials(config['username'], config['password'])
