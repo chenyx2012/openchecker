@@ -18,11 +18,53 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(
 
 config = read_config('config/config.ini')
 
+def get_licenses_name(data):
+    return next(
+        (license['meta']['title'] 
+         for license in data.get('licenses', []) 
+         if license.get('meta', {}).get('title')), 
+        None
+    )
+
+def ruby_licenses(data):
+    github_url_pattern = "https://github.com/"
+    for item in data["analyzer"]["result"]["packages"]:
+        declared_licenses = item["declared_licenses"]
+        homepage_url = item.get('homepage_url', '')
+        vcs_url = item.get('vcs_processed', {}).get('url', '').replace('.git', '')
+
+        # 检查 declared_licenses 是否为空
+        if not declared_licenses or len(declared_licenses)==0:
+            # 优先检查 vcs_url 是否为 GitHub 地址
+            if vcs_url.startswith(github_url_pattern):
+                project_url = vcs_url
+            elif homepage_url.startswith(github_url_pattern):
+                project_url = homepage_url
+            else:
+                project_url = None
+            # 如果找到了有效的 GitHub 地址，克隆仓库并调用 licensee
+            if project_url:
+                shell_script=f"""
+                    project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                    if [ ! -e "$project_name" ]; then
+                        GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
+                    fi
+                    licensee detect "$project_name" --json
+                    rm -rf $project_name > /dev/null
+                """
+                result, error = shell_exec(shell_script)
+                if error == None:
+                    license_info = json.loads(result)
+                    item['declared_licenses'] = get_licenses_name(license_info)
+                else:
+                    logging.info("ruby_licenses job failed: {}, error: {}".format(project_url, error))
+
 def dependency_checker_output_process(output):
     if not bool(output):
         return {}
 
     result = json.loads(output.decode('utf-8'))
+    result = ruby_licenses(result)
     try:
         packages = result["analyzer"]["result"]["packages"]
         result = {"packages_all": [], "packages_with_license_detect": [], "packages_without_license_detect": []}
