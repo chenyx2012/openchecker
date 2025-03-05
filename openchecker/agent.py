@@ -55,7 +55,8 @@ def ruby_licenses(data):
                 result, error = shell_exec(shell_script)
                 if error == None:
                     license_info = json.loads(result)
-                    item['declared_licenses'] = get_licenses_name(license_info)
+                    licenses_name= get_licenses_name(license_info)
+                    item['declared_licenses'].append(licenses_name)
                 else:
                     logging.info("ruby_licenses job failed: {}, error: {}".format(project_url, error))
 
