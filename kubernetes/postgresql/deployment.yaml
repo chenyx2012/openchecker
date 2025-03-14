@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      # nodeSelector:
+      #   environment: production
+      containers:
+      - name: postgres
+        image: postgres:alpine3.17
+        envFrom:
+        - configMapRef:
+            name: postgres-config
+        env:
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secret
+              key: password
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        - name: timezone-volume
+          mountPath: /etc/timezone
+        - name: localtime-volume
+          mountPath: /etc/localtime
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+      - name: timezone-volume
+        hostPath:
+          path: /etc/timezone
+      - name: localtime-volume
+        hostPath:
+          path: /etc/localtime
