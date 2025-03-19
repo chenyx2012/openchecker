@@ -14,7 +14,6 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    cert-manager.io/cluster-issuer: letsencrypt-dns01
     nginx.ingress.kubernetes.io/backend-protocol: HTTPS # 指定后端协议为https
     nginx.ingress.kubernetes.io/upstream-vhost: sonarqube.mlops.pub #指定转发上游的host为要代理的域名
   name: compass-ingress
