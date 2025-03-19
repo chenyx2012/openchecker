@@ -34,6 +34,7 @@ metadata:
     kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/backend-protocol: HTTP # 指定后端协议为http
+    nginx.ingress.kubernetes.io/proxy-body-size: "16m"
   name: compass-ingress
   namespace: compass
 spec:
