@@ -5,10 +5,10 @@ metadata:
   namespace: compass
 spec:
   ports:
-  - name: https
-    port: 443
+  - name: http
+    port: 80
     protocol: TCP
-    targetPort: 443
+    targetPort: 80
   type: ClusterIP
 
 ---
@@ -22,8 +22,8 @@ subsets:
 - addresses:
   - ip: 106.12.68.99
   ports:
-  - name: https
-    port: 443
+  - name: http
+    port: 80
     protocol: TCP
 
 ---
@@ -33,7 +33,7 @@ metadata:
   annotations:
     kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/backend-protocol: HTTPS # 指定后端协议为https
+    nginx.ingress.kubernetes.io/backend-protocol: HTTP # 指定后端协议为http
   name: compass-ingress
   namespace: compass
 spec:
@@ -49,6 +49,6 @@ spec:
           service:
             name: compass-proxy
             port:
-              number: 443
+              number: 80
         path: /
-        pathType: ImplementationSpecific
+        pathType: Prefix
