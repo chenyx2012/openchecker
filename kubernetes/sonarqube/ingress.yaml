@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kuard
+  namespace: sonarqube
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: letsencrypt-dns01
+spec:
+  tls:
+  - hosts:
+    - sonarqube.mlops.pub
+    secretName: sonarqube-mlops-pub-tls
+  rules:
+  - host: sonarqube.mlops.pub
+    http:
+        paths:
+        - backend:
+            service:
+              name: sonarqube
+              port:
+                number: 9000
+          path: /
+          pathType: Prefix
