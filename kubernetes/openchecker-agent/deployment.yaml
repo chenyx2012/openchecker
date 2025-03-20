@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openchecker-agent
+  namespace: openchecker
+  labels:
+    app: openchecker-agent
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: openchecker-agent
+  template:
+    metadata:
+      labels:
+        app: openchecker-agent
+    spec:
+      containers:
+      - name: openchecker-agent
+        image: guoqiangqi/openchecker:v0.19
+        command: ["python", "-u", "openchecker/agent.py"]
+
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config/
+          subPath: config
+      volumes:
+      - name: config-volume
+        persistentVolumeClaim:
+          claimName: openchecker-pvc

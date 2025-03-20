@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openchecker-main
+  namespace: openchecker
+  labels:
+    app: openchecker-main
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openchecker-main
+  template:
+    metadata:
+      labels:
+        app: openchecker-main
+    spec:
+      containers:
+      - name: openchecker-main
+        image: guoqiangqi/openchecker:v0.19
+        command: ["python", "-u", "openchecker/main.py"]
+        ports:
+        - containerPort: 80
+
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config/
+          subPath: config
+      volumes:
+      - name: config-volume
+        persistentVolumeClaim:
+          claimName: openchecker-pvc
