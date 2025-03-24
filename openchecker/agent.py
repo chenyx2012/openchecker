@@ -55,9 +55,12 @@ def ruby_licenses(data):
                 """
                 result, error = shell_exec(shell_script)
                 if error == None:
-                    license_info = json.loads(result)
-                    licenses_name= get_licenses_name(license_info)
-                    item['declared_licenses'].append(licenses_name)
+                    try:
+                        license_info = json.loads(result)
+                        licenses_name = get_licenses_name(license_info)
+                        item['declared_licenses'].append(licenses_name)
+                    except json.JSONDecodeError as e:
+                        logging.error(f"Failed to parse JSON from {project_url}: {e}")
                 else:
                     logging.info("ruby_licenses job failed: {}, error: {}".format(project_url, error))
     return data
