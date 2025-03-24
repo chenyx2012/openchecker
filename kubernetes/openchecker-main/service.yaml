@@ -34,7 +34,7 @@ spec:
       - path: /
         backend:
           service:
-            name: openchecker-agent-service
+            name: openchecker-main-service
             port:
               number: 80
         pathType: Prefix
