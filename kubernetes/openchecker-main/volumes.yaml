@@ -4,37 +4,28 @@ kind: PersistentVolume
 metadata:
   name: openchecker-pv
   namespace: openchecker
-  labels:
-    type: local
 spec:
-  storageClassName: local-storage
-  #claimRef:
-  #  name: postgres-pvc
   capacity:
-    storage: 1Gi
+    storage: 10Mi
   accessModes:
     - ReadWriteMany
   persistentVolumeReclaimPolicy: Retain
-  local:
-    path: /openchecker-data/config
-  nodeAffinity:
-    required:
-      nodeSelectorTerms:
-      - matchExpressions:
-        - key: kubernetes.io/hostname
-          operator: In
-          values:
-          - k8s-node01
+  storageClassName: nfs-client
+  nfs:
+    server: 192.168.0.110
+    path: /nfs_provisioner_data/openchecker-data/config
+
 ---
-apiVersion: v1
 kind: PersistentVolumeClaim
+apiVersion: v1
 metadata:
   name: openchecker-pvc
   namespace: openchecker
+  annotations: {}
 spec:
-  storageClassName: local-storage
+  storageClassName: nfs-client
   accessModes:
     - ReadWriteMany
   resources:
     requests:
-      storage: 1Gi
+      storage: 10Mi
