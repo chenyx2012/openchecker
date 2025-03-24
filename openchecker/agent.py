@@ -14,7 +14,7 @@ import io
 import logging
 from urllib.parse import urlparse
 
-logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s : %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
 
 config = read_config('config/config.ini')
 
