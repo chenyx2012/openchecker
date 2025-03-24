@@ -59,6 +59,7 @@ def ruby_licenses(data):
                     item['declared_licenses'].append(licenses_name)
                 else:
                     logging.info("ruby_licenses job failed: {}, error: {}".format(project_url, error))
+    return data
 
 def dependency_checker_output_process(output):
     if not bool(output):
