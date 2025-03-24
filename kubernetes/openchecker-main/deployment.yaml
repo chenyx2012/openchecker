@@ -18,6 +18,7 @@ spec:
       containers:
       - name: openchecker-main
         image: guoqiangqi/openchecker:v0.19
+        imagePullPolicy: Always
         command: ["python", "-u", "openchecker/main.py"]
         ports:
         - containerPort: 80
