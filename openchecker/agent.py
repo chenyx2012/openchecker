@@ -27,6 +27,7 @@ def get_licenses_name(data):
     )
 
 def ruby_licenses(data):
+    return data
     github_url_pattern = "https://github.com/"
     for item in data["analyzer"]["result"]["packages"]:
         declared_licenses = item["declared_licenses"]
