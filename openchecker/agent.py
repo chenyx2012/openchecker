@@ -14,7 +14,7 @@ import io
 import logging
 from urllib.parse import urlparse
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s : %(message)s')
 
 config = read_config('config/config.ini')
 
@@ -27,7 +27,6 @@ def get_licenses_name(data):
     )
 
 def ruby_licenses(data):
-    return data
     github_url_pattern = "https://github.com/"
     for item in data["analyzer"]["result"]["packages"]:
         declared_licenses = item["declared_licenses"]
@@ -60,7 +59,7 @@ def ruby_licenses(data):
                         licenses_name = get_licenses_name(license_info)
                         item['declared_licenses'].append(licenses_name)
                     except json.JSONDecodeError as e:
-                        logging.error(f"Failed to parse JSON from {project_url}: {e}")
+                        logging.error(f"Failed to parse JSON from {project_url}: {e}, licensee result: {result}")
                 else:
                     logging.info("ruby_licenses job failed: {}, error: {}".format(project_url, error))
     return data
