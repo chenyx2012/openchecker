@@ -52,7 +52,7 @@ def publish_message(config, queue_name, message_body):
 
 def consumer(config, queue_name, callback_func):
     credentials = pika.PlainCredentials(config['username'], config['password'])
-    parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials, heartbeat=config['heartbeat_interval_s'], blocked_connection_timeout=config['blocked_connection_timeout_ms'])
+    parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials, heartbeat=int(config['heartbeat_interval_s']), blocked_connection_timeout=int(config['blocked_connection_timeout_ms']))
 
     while True:
         try:
