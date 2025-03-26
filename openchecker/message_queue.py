@@ -59,7 +59,7 @@ def consumer(config, queue_name, callback_func):
             connection = pika.BlockingConnection(parameters)
             channel = connection.channel()
             channel.basic_qos(prefetch_count=1)
-            channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=False)
+            channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=True)
             logging.info('Consumer connected, wating for messages...')
             channel.start_consuming()
         except pika.exceptions.ConnectionClosedByBroker as e:

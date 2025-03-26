@@ -304,7 +304,7 @@ def callback_func(ch, method, properties, body):
     else:
         logging.info("download source code failed: {}, error: {}".format(project_url, error))
         logging.info("put messages to dead letters: {}".format(body))
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        # ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
         return
 
     ## Generate the lock files, which would be used by the osv-scanner and ort tools.
@@ -773,10 +773,10 @@ def callback_func(ch, method, properties, body):
             logging.info("Error happened when request to callback url: {}".format(e))
             logging.info("put messages to dead letters: {}".format(body))
             logging.info("checker results: {}".format(res_payload))
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            # ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             return
 
-    ch.basic_ack(delivery_tag=method.delivery_tag)
+    # ch.basic_ack(delivery_tag=method.delivery_tag)
 
 if __name__ == "__main__":
     consumer(config["RabbitMQ"], "opencheck", callback_func)
