@@ -2,17 +2,6 @@ import pika
 from helper import read_config
 import logging, time
 
-def test_rabbitmq_connection(config):
-    credentials = pika.PlainCredentials(config['username'], config['password'])
-    parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials)
-
-    try:
-        connection = pika.BlockingConnection(parameters)
-        connection.close()
-        logging.info("RabbitMQ connection successful.")
-    except Exception as e:
-        logging.info(f"Error connecting to RabbitMQ: {str(e)}")
-
 def create_queue(config, queue_name, arguments={}):
     credentials = pika.PlainCredentials(config['username'], config['password'])
     parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials)
@@ -198,6 +187,17 @@ def purge_queue(config, queue_name):
         logging.info(f"Queue {queue_name} purged successfully.")
     except Exception as e:
         logging.info(f"Error purging queue {queue_name}: {str(e)}")
+
+def test_rabbitmq_connection(config):
+    credentials = pika.PlainCredentials(config['username'], config['password'])
+    parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials)
+
+    try:
+        connection = pika.BlockingConnection(parameters)
+        connection.close()
+        logging.info("RabbitMQ connection successful.")
+    except Exception as e:
+        logging.info(f"Error connecting to RabbitMQ: {str(e)}")
 
 if __name__ == "__main__":
     config = read_config('config/config.ini', "RabbitMQ")
