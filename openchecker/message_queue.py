@@ -54,27 +54,79 @@ def consumer(config, queue_name, callback_func):
     credentials = pika.PlainCredentials(config['username'], config['password'])
     parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials, heartbeat=int(config['heartbeat_interval_s']), blocked_connection_timeout=int(config['blocked_connection_timeout_ms']))
 
+    # Heartbeat thread control flag
+    heartbeat_running = False
+
+    def heartbeat_sender(connection):
+        """Independent heartbeat sending thread"""
+        nonlocal heartbeat_running
+        heartbeat_running = True
+        try:
+            while heartbeat_running:
+                try:
+                    # Keep heartbeat with processing events
+                    if connection and connection.is_open:
+                        connection.process_data_events()
+                except Exception as e:
+                    logging.error(f"Heartbeat error: {e}")
+                time.sleep(max(1, int(config['heartbeat_interval_s']) // 2))
+        finally:
+            heartbeat_running = False
+
     while True:
+        heartbeat_thread = None
+        connection = None
         try:
             connection = pika.BlockingConnection(parameters)
             channel = connection.channel()
             channel.basic_qos(prefetch_count=1)
+
+            # Start heartbeat thread
+            heartbeat_thread = threading.Thread(
+                target=heartbeat_sender,
+                args=(connection,),
+                daemon=True
+            )
+            heartbeat_thread.start()
+
             channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=True)
             logging.info('Consumer connected, wating for messages...')
             channel.start_consuming()
+
         except pika.exceptions.ConnectionClosedByBroker as e:
             logging.error(f"Connection closed by broker: {e}")
-            logging.info(f"retrying")
+            logging.info("Retrying...")
+            if heartbeat_thread:
+                heartbeat_running = False
+                heartbeat_thread.join(timeout=2)
             time.sleep(60)
             continue
+
         except pika.exceptions.AMQPChannelError as e:
             logging.error(f"AMQP channel error: {e}")
-            logging.info(f"retrying")
+            logging.info("Retrying...")
+            if heartbeat_thread:
+                heartbeat_running = False
+                heartbeat_thread.join(timeout=2)
             time.sleep(60)
             continue
+
         except Exception as e:
-            logging.info(f"Consumer failed as: {e}")
+            logging.error(f"Consumer failed: {e}")
+            if heartbeat_thread:
+                heartbeat_running = False
+                heartbeat_thread.join(timeout=2)
+            if connection and connection.is_open:
+                connection.close()
             return str(e)
+
+        finally:
+            # Ensure the heartbeat thread stops
+            if heartbeat_thread:
+                heartbeat_running = False
+                heartbeat_thread.join(timeout=2)
+            if connection and connection.is_open:
+                connection.close()
 
 def check_queue_status(config, queue_name):
     credentials = pika.PlainCredentials(config['username'], config['password'])
