@@ -89,7 +89,7 @@ def consumer(config, queue_name, callback_func):
             )
             heartbeat_thread.start()
 
-            channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=True)
+            channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=False)
             logging.info('Consumer connected, wating for messages...')
             channel.start_consuming()
 
