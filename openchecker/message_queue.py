@@ -1,6 +1,7 @@
 import pika
 from helper import read_config
 import logging, time
+import threading
 
 def create_queue(config, queue_name, arguments={}):
     credentials = pika.PlainCredentials(config['username'], config['password'])
