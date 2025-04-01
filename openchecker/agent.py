@@ -221,7 +221,7 @@ def check_doc_content(project_url, type):
     return build_doc_file, None
 
 def check_release_content(project_url):
-    owner_name = re.match(r"https://(?:github|gitee).com/([^/]+)/", project_url).group(1)
+    owner_name = re.match(r"https://(?:github|gitee|gitcode).com/([^/]+)/", project_url).group(1)
     repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
 
     if "github.com" in project_url:
@@ -437,7 +437,7 @@ def callback_func(ch, method, properties, body):
 
         elif command == 'sonar-scanner':
 
-            pattern = r'https?://(?:www\.)?(github\.com|gitee\.com)/([^/]+)/([^/]+)\.git'
+            pattern = r'https?://(?:www\.)?(github\.com|gitee\.com|gitcode\.com)/([^/]+)/([^/]+)\.git'
             match = re.match(pattern, project_url)
             if match:
                 platform, organization, project = match.groups()
