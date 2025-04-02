@@ -59,7 +59,7 @@ def ruby_licenses(data):
                         licenses_name = get_licenses_name(license_info)
                         item['declared_licenses'].append(licenses_name)
                     except json.JSONDecodeError as e:
-                        logging.error(f"Failed to parse JSON from {project_url}: {e}, licensee result: {result}")
+                        logging.error(f"Failed to parse JSON from {project_url}: {e}")
                 else:
                     logging.error("ruby_licenses job failed: {}, error: {}".format(project_url, error))
     return data
@@ -772,7 +772,7 @@ def callback_func(ch, method, properties, body):
         except Exception as e:
             logging.error("Error happened when request to callback url: {}".format(e))
             logging.error("put messages to dead letters: {}".format(body))
-            logging.error("checker results: {}".format(res_payload))
+            # logging.error("checker results: {}".format(res_payload))
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             return
 
