@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: openchecker-agent
-        image: guoqiangqi/openchecker:v0.19
+        image: guoqiangqi/openchecker:v0.21
         imagePullPolicy: Always
         command: ["python", "-u", "openchecker/agent.py"]
 
