@@ -108,7 +108,7 @@ According to the prompt, use the `kubectl` tool on the Master node to view the n
 ```bash
 $ kubectl get nodes
 ```
-![k8s-node-status0](./materials/images/k8s-node-status0.png)
+![k8s-node-status0](https://github.com/TECH4DX/MLops-Tools/blob/main/materials/images/k8s-node-status0.png)
 
 Deploy the `CNI` network plug-in on the Master node(May fail, if it fails, please download to local, then install):  
 
@@ -119,7 +119,7 @@ Use the `kubectl` tool on the Master node to view the node status again:
 ```bash
 $ kubectl get nodes
 ```
-![k8s-node-status0](./materials/images/k8s-node-status1.png)
+![k8s-node-status0](https://github.com/TECH4DX/MLops-Tools/blob/main/materials/images/k8s-node-status1.png)
 
 ## Fix Unhealthy status
 After the cluster is deployed, when `kubectl` get cscommand is executed to check the running status of the components, the following errors may be reported:
