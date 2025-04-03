@@ -279,6 +279,7 @@ def callback_func(ch, method, properties, body):
     commit_hash = message.get("commit_hash")
     callback_url = message.get('callback_url')
     task_metadata = message.get('task_metadata')
+    version_number = task_metadata.get("version_number", "None")
     logging.info(project_url)
 
     res_payload = {
@@ -294,6 +295,21 @@ def callback_func(ch, method, properties, body):
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
                     GIT_ASKPASS=/bin/true git clone {project_url}
+                fi
+
+                cd "$project_name"
+
+                if [ {version_number} != "None" ]; then
+                    # 检查版本号是否在git仓库的tag中
+                    if git tag | grep -q "^$version_number$"; then
+                        # 切换到对应的tag
+                        git checkout "$version_number"
+                        if [ $? -eq 0 ]; then
+                            echo "成功切换到标签 $version_number"
+                        else
+                            echo "切换到标签 $version_number 失败"
+                        fi
+                    fi
                 fi
             """
 
