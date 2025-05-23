@@ -1,9 +1,106 @@
 ## OpenChecker
-This project is a comprehensive software analysis toolset that performs various scans and checks on source code repositories.
+OpenChecker is a comprehensive software analysis and compliance checking platform that performs automated security, license, and quality assessments on source code repositories. The system operates as a distributed, message-driven architecture that can execute multiple analysis tools concurrently on software projects and return detailed compliance reports.
 
-## Overview
-The project consists of multiple modules that interact with various tools and APIs to analyze different aspects of a software project. It can perform tasks such as checking for open source compliance, scanning for licenses, detecting binary files, checking release content, and more.The architecture of the openchecker are below:
-![architecture](./docs/architecture.png)
+## Documents
+
+- [Overview](./docs/Overview.md)
+- [Core-Architecture](./docs/Core-Architecture.md)
+- [Agent-System](./docs/Agent-System.md)
+- [Message-Queue-Integration](./docs/Message-Queue-Integration.md)
+- [API-and-Authentication](./docs/API-and-Authentication.md)
+- [REST-API-Endpoints](./docs/REST-API-Endpoints.md)
+- [User-Management-and-Authentication](./docs/User-Management-and-Authentication.md)
+- [Analysis-Tools-and-Checkers](./docs/Analysis-Tools-and-Checkers.md)
+- [Container-Environment-and-Tool-Installation](./docs/Container-Environment-and-Tool-Installation.md)
+- [Security-and-Compliance-Checkers](./docs/Security-and-Compliance-Checkers.md)
+- [AI-and-Machine-Learning-Components](./docs/AI-and-Machine-Learning-Components.md)
+- [Project-Classification-System](./docs/Project-Classification-System.md)
+- [Clustering-and-Embeddings](./docs/Clustering-and-Embeddings.md)
+- [Deployment-and-Infrastructure](./docs/Deployment-and-Infrastructure.md)
+- [Kubernetes-Deployments](./docs/Kubernetes-Deployments.md)
+- [Supporting-Services](./docs/Supporting-Services.md)
+- [Storage-and-Configuration-Management](./docs/Storage-and-Configuration-Management.md)
+- [External-Service-Integration](./docs/External-Service-Integration.md)
+- [Installation-and-Setup-Guide](./docs/Installation-and-Setup-Guide.md)
+- [Development-and-Testing](./docs/Development-and-Testing.md)
+
+The documents generated with DeepWiki and also hosted on https://deepwiki.com/Laniakea2012/openchecker for better readability. 
+
+## System Architecture Overview
+OpenChecker implements a microservices architecture with asynchronous message processing, designed for scalability and reliability in analyzing software repositories. The project consists of multiple modules that interact with various tools and APIs to analyze different aspects of a software project. It can perform tasks such as checking for open source compliance, scanning for licenses, detecting binary files, checking release content, and more.The architecture of the openchecker are below:
+
+<div style="text-align: center">
+<img src="./docs/architecture.png" alt=" Architecture Overview" style="width: 50%; height: auto;">
+</div>
+
+```mermaid
+flowchart TD
+
+API["openchecker-mainFlask AppPort 80"]
+Ingress["Nginx Ingressopenchecker.mlops.pub"]
+RMQ["RabbitMQ Broker"]
+OpenCheckQueue["opencheck queue"]
+DeadLetterQueue["dead_letters queue"]
+Agent1["openchecker-agent Pod 1"]
+Agent2["openchecker-agent Pod 2"]
+Agent3["openchecker-agent Pod 3"]
+OSV["osv-scannerVulnerability Detection"]
+ScanCode["scancodeLicense Analysis"]
+Sonar["sonar-scannerCode Quality"]
+Binary["binary-checkerFile Analysis"]
+ORT["ortDependency Analysis"]
+OAT["oatOpenHarmony Audit"]
+NFS["openchecker-pvcNFS Storage"]
+ConfigFile["config/config.ini"]
+
+    API --> RMQ
+    OpenCheckQueue --> Agent1
+    OpenCheckQueue --> Agent2
+    OpenCheckQueue --> Agent3
+    Agent1 --> OSV
+    Agent1 --> ScanCode
+    Agent1 --> Sonar
+    Agent2 --> Binary
+    Agent2 --> ORT
+    Agent3 --> OAT
+    API --> NFS
+    Agent1 --> NFS
+    ConfigFile --> API
+    ConfigFile --> RMQ
+subgraph Storage__Config ["Storage & Config"]
+    NFS
+    ConfigFile
+end
+
+subgraph Analysis_Engine ["Analysis Engine"]
+    OSV
+    ScanCode
+    Sonar
+    Binary
+    ORT
+    OAT
+end
+
+subgraph Worker_Layer ["Worker Layer"]
+    Agent1
+    Agent2
+    Agent3
+end
+
+subgraph Message_Infrastructure ["Message Infrastructure"]
+    RMQ
+    OpenCheckQueue
+    DeadLetterQueue
+    RMQ --> OpenCheckQueue
+    OpenCheckQueue --> DeadLetterQueue
+end
+
+subgraph External_Interface ["External Interface"]
+    API
+    Ingress
+    Ingress --> API
+end
+```
 
 ## Installation
 1. Clone the repository.
