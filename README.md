@@ -1,30 +1,6 @@
 ## OpenChecker
 OpenChecker is a comprehensive software analysis and compliance checking platform that performs automated security, license, and quality assessments on source code repositories. The system operates as a distributed, message-driven architecture that can execute multiple analysis tools concurrently on software projects and return detailed compliance reports.
 
-## Documents
-
-- [Overview](./docs/Overview.md)
-- [Core-Architecture](./docs/Core-Architecture.md)
-- [Agent-System](./docs/Agent-System.md)
-- [Message-Queue-Integration](./docs/Message-Queue-Integration.md)
-- [API-and-Authentication](./docs/API-and-Authentication.md)
-- [REST-API-Endpoints](./docs/REST-API-Endpoints.md)
-- [User-Management-and-Authentication](./docs/User-Management-and-Authentication.md)
-- [Analysis-Tools-and-Checkers](./docs/Analysis-Tools-and-Checkers.md)
-- [Container-Environment-and-Tool-Installation](./docs/Container-Environment-and-Tool-Installation.md)
-- [Security-and-Compliance-Checkers](./docs/Security-and-Compliance-Checkers.md)
-- [AI-and-Machine-Learning-Components](./docs/AI-and-Machine-Learning-Components.md)
-- [Project-Classification-System](./docs/Project-Classification-System.md)
-- [Clustering-and-Embeddings](./docs/Clustering-and-Embeddings.md)
-- [Deployment-and-Infrastructure](./docs/Deployment-and-Infrastructure.md)
-- [Kubernetes-Deployments](./docs/Kubernetes-Deployments.md)
-- [Supporting-Services](./docs/Supporting-Services.md)
-- [Storage-and-Configuration-Management](./docs/Storage-and-Configuration-Management.md)
-- [External-Service-Integration](./docs/External-Service-Integration.md)
-- [Installation-and-Setup-Guide](./docs/Installation-and-Setup-Guide.md)
-- [Development-and-Testing](./docs/Development-and-Testing.md)
-
-The documents generated with DeepWiki and also hosted on https://deepwiki.com/Laniakea2012/openchecker for better readability. 
 
 ## System Architecture Overview
 OpenChecker implements a microservices architecture with asynchronous message processing, designed for scalability and reliability in analyzing software repositories. The project consists of multiple modules that interact with various tools and APIs to analyze different aspects of a software project. It can perform tasks such as checking for open source compliance, scanning for licenses, detecting binary files, checking release content, and more.The architecture of the openchecker are below:
@@ -101,6 +77,31 @@ subgraph External_Interface ["External Interface"]
     Ingress --> API
 end
 ```
+
+## Documents
+
+- [Overview](./docs/Overview.md)
+- [Core-Architecture](./docs/Core-Architecture.md)
+- [Agent-System](./docs/Agent-System.md)
+- [Message-Queue-Integration](./docs/Message-Queue-Integration.md)
+- [API-and-Authentication](./docs/API-and-Authentication.md)
+- [REST-API-Endpoints](./docs/REST-API-Endpoints.md)
+- [User-Management-and-Authentication](./docs/User-Management-and-Authentication.md)
+- [Analysis-Tools-and-Checkers](./docs/Analysis-Tools-and-Checkers.md)
+- [Container-Environment-and-Tool-Installation](./docs/Container-Environment-and-Tool-Installation.md)
+- [Security-and-Compliance-Checkers](./docs/Security-and-Compliance-Checkers.md)
+- [AI-and-Machine-Learning-Components](./docs/AI-and-Machine-Learning-Components.md)
+- [Project-Classification-System](./docs/Project-Classification-System.md)
+- [Clustering-and-Embeddings](./docs/Clustering-and-Embeddings.md)
+- [Deployment-and-Infrastructure](./docs/Deployment-and-Infrastructure.md)
+- [Kubernetes-Deployments](./docs/Kubernetes-Deployments.md)
+- [Supporting-Services](./docs/Supporting-Services.md)
+- [Storage-and-Configuration-Management](./docs/Storage-and-Configuration-Management.md)
+- [External-Service-Integration](./docs/External-Service-Integration.md)
+- [Installation-and-Setup-Guide](./docs/Installation-and-Setup-Guide.md)
+- [Development-and-Testing](./docs/Development-and-Testing.md)
+
+The documents generated with DeepWiki and also hosted on https://deepwiki.com/Laniakea2012/openchecker for better readability. 
 
 ## Installation
 1. Clone the repository.
