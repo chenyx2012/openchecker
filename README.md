@@ -29,9 +29,9 @@ The documents generated with DeepWiki and also hosted on https://deepwiki.com/La
 ## System Architecture Overview
 OpenChecker implements a microservices architecture with asynchronous message processing, designed for scalability and reliability in analyzing software repositories. The project consists of multiple modules that interact with various tools and APIs to analyze different aspects of a software project. It can perform tasks such as checking for open source compliance, scanning for licenses, detecting binary files, checking release content, and more.The architecture of the openchecker are below:
 
-<div style="text-align: center">
+<p align="center">
 <img src="./docs/architecture.png" alt=" Architecture Overview" style="width: 50%; height: auto;">
-</div>
+</p>
 
 ```mermaid
 flowchart TD
