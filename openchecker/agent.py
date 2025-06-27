@@ -220,6 +220,45 @@ def check_doc_content(project_url, type):
                 return build_doc_file, None
     return build_doc_file, None
 
+def get_all_releases_with_assets(project_url):
+    """
+    获取所有release及其assets，支持github.com和gitee.com。
+    返回：
+        list: 每个元素为release的dict，包含tag、name、assets等字段。
+        str or None: 错误信息，无错为None。
+    """
+    import logging
+    import re
+    import os
+    import requests
+    from ghapi.all import GhApi, paged
+
+    owner_name = re.match(r"https://(?:github|gitee|gitcode).com/([^/]+)/", project_url).group(1)
+    repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
+
+    if "github.com" in project_url:
+        api = GhApi(owner=owner_name, repo=repo_name)
+        try:
+            all_releases = []
+            for page in paged(api.repos.list_releases, owner_name, repo_name, per_page=10):
+                all_releases.extend(page)
+            return all_releases, None
+        except Exception as e:
+            logging.error(f"Failed to get releases for repo: {project_url} \n Error: {e}")
+            return [], f"failed to get releases for repo: {project_url}"
+    elif "gitee.com" in project_url:
+        url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/releases"
+        response = requests.get(url)
+        if response.status_code == 200:
+            releases = response.json()
+            return releases, None
+        else:
+            logging.error(f"Failed to get releases for repo: {project_url} \n Error: Not found")
+            return [], "Not found"
+    else:
+        logging.info(f"Failed to do releases check for repo: {project_url} \n Error: Not supported platform.")
+        return [], "Not supported platform."
+
 def check_release_notes(project_url):
     """
     检查指定项目所有 release 包中是否包含 release notes 文件。
@@ -251,123 +290,61 @@ def check_release_notes(project_url):
     """
     owner_name = re.match(r"https://(?:github|gitee|gitcode).com/([^/]+)/", project_url).group(1)
     repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
+    gitee_access_token = config["Gitee"]["access_key"]
+
+    all_releases, error = get_all_releases_with_assets(project_url)
+    if error:
+        return {"is_released": False, "release_notes": []}, error
+
+    if not all_releases:
+        return {"is_released": False, "release_notes": []}, "No releases found"
 
     results = []
-    if "github.com" in project_url:
-        api = GhApi(owner=owner_name, repo=repo_name)
+    for rel in all_releases:
+        if rel.get('draft', False) or rel.get('prerelease', False):
+            continue
+        tag = rel.get("tag_name", "")
+        release_name = rel.get("name", tag)
+        zip_url = rel.get("zipball_url", None)  if "github.com" in project_url else f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/zipball?access_token={gitee_access_token}&ref={tag}"
+        if not zip_url:
+            results.append({
+                "tag": tag,
+                "release_name": release_name,
+                "has_release_notes": False,
+                "release_notes_files": [],
+                "error": "No zipball_url"
+            })
+            continue
         try:
-            all_releases = []
-            for page in paged(api.repos.list_releases, owner_name, repo_name, per_page=10):
-                all_releases.extend(page)
- 
-            if not all_releases:
-                return {"is_released": False, "release_notes": []}, "No releases found"
-        except Exception as e:
-            logging.error("Failed to get releases for repo: {} \n Error: {}".format(project_url, e))
-            return {"is_released": False, "release_notes": []}, "Not found"
-
-        for rel in all_releases:
-            if rel.get('draft', False) or rel.get('prerelease', False):
-                continue
-
-            tag = rel.get("tag_name", "")
-            zip_url = rel.get("zipball_url", None)
-            release_id = rel.get("id", None)
-            release_name = rel.get("name", tag)
-            if not zip_url:
+            response = requests.get(zip_url)
+            if response.status_code != 200:
                 results.append({
                     "tag": tag,
                     "release_name": release_name,
                     "has_release_notes": False,
                     "release_notes_files": [],
-                    "error": "No zipball_url"
+                    "error": f"Failed to download release zip: {response.status_code}"
                 })
                 continue
-            try:
-                response = requests.get(zip_url)
-                if response.status_code != 200:
-                    results.append({
-                        "tag": tag,
-                        "release_name": release_name,
-                        "has_release_notes": False,
-                        "release_notes_files": [],
-                        "error": f"Failed to download release zip: {response.status_code}"
-                    })
-                    continue
-                with zipfile.ZipFile(io.BytesIO(response.content), 'r') as zip_ref:
-                    changelog_names = ["changelog", "releasenotes", "release_notes", "release"]
-                    found_files = [file for file in zip_ref.namelist() if any(name in os.path.basename(file).lower() for name in changelog_names)]
-                    results.append({
-                        "tag": tag,
-                        "release_name": release_name,
-                        "has_release_notes": bool(found_files),
-                        "release_notes_files": found_files,
-                        "error": None
-                    })
-            except Exception as e:
+            with zipfile.ZipFile(io.BytesIO(response.content), 'r') as zip_ref:
+                changelog_names = ["changelog", "releasenotes", "release_notes", "release"]
+                found_files = [file for file in zip_ref.namelist() if any(name in os.path.basename(file).lower() for name in changelog_names)]
                 results.append({
                     "tag": tag,
                     "release_name": release_name,
-                    "has_release_notes": False,
-                    "release_notes_files": [],
-                    "error": f"Failed to check release zip."
+                    "has_release_notes": bool(found_files),
+                    "release_notes_files": found_files,
+                    "error": None
                 })
-        return {"is_released": bool(results), "release_notes": results}, None
-
-    elif "gitee.com" in project_url:
-        url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/releases"
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                releases = response.json()
-                if not releases:
-                    return {"is_released": False, "release_notes": []}, "No releases found"
-            else:
-                logging.error("Failed to get releases for repo: {} \n Error: {}".format(project_url, "Not found"))
-                return {"is_released": False, "release_notes": []}, "Not found"
         except Exception as e:
-            logging.error("Failed to get releases for repo: {} \n Error: {}".format(project_url, e))
-            return {"is_released": False, "release_notes": []}, "Not found"
-
-        access_token = config["Gitee"]["access_key"]
-        for rel in releases:
-            tag = rel.get("tag_name", "")
-            release_name = rel.get("name", tag)
-            zip_url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/zipball?access_token={access_token}&ref={tag}"
-            try:
-                response = requests.get(zip_url)
-                if response.status_code != 200:
-                    results.append({
-                        "tag": tag,
-                        "release_name": release_name,
-                        "has_release_notes": False,
-                        "release_notes_files": [],
-                        "error": f"Failed to download release zip: {response.status_code}"
-                    })
-                    continue
-                with zipfile.ZipFile(io.BytesIO(response.content), 'r') as zip_ref:
-                    changelog_names = ["changelog", "releasenotes", "release_notes", "release"]
-                    found_files = [file for file in zip_ref.namelist() if any(name in os.path.basename(file).lower() for name in changelog_names)]
-                    results.append({
-                        "tag": tag,
-                        "release_name": release_name,
-                        "has_release_notes": bool(found_files),
-                        "release_notes_files": found_files,
-                        "error": None
-                    })
-            except Exception as e:
-                results.append({
-                    "tag": tag,
-                    "release_name": release_name,
-                    "has_release_notes": False,
-                    "release_notes_files": [],
-                    "error": f"Failed to check release zip."
-                })
-        return {"is_released": bool(results), "release_notes": results}, None
-
-    else:
-        logging.info("Failed to do release files check for repo: {} \n Error: {}".format(project_url, "Not supported platform."))
-        return {"is_released": False, "release_notes": []}, "Not supported platform."
+            results.append({
+                "tag": tag,
+                "release_name": release_name,
+                "has_release_notes": False,
+                "release_notes_files": [],
+                "error": f"Failed to check release zip."
+            })
+    return {"is_released": bool(results), "release_notes": results}, None
 
 def check_signed_release(project_url):
     """
@@ -387,62 +364,29 @@ def check_signed_release(project_url):
     signature_exts = [
         ".minisig", ".asc", ".sig", ".sign", ".sigstore", ".intoto.jsonl"
     ]
-    owner_name = re.match(r"https://(?:github|gitee|gitcode).com/([^/]+)/", project_url).group(1)
-    repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
+    
+    all_releases, error = get_all_releases_with_assets(project_url)
+    if error:
+        return {"is_released": False, "signed_files": []}, error
+    
+    if not all_releases:
+        return {"is_released": False, "signed_files": []}, "No releases found"
+
     results = []
-
-    if "github.com" in project_url:
-        api = GhApi(owner=owner_name, repo=repo_name)
-        try:
-            all_releases = []
-            for page in paged(api.repos.list_releases, owner_name, repo_name, per_page=10):
-                all_releases.extend(page)
-            if not all_releases:
-                return {"is_released": False, "signed_files": []}, "No releases found"
-        except Exception as e:
-            logging.error(f"Failed to get releases for repo: {project_url} \n Error: {e}")
-            return {"is_released": False, "signed_files": []}, f"failed to get releases for repo: {project_url}"
-        for rel in all_releases:
-            if rel.get('draft', False) or rel.get('prerelease', False):
-                continue
-            tag = rel.get("tag_name", "")
-            release_name = rel.get("name", tag)
-            assets = rel.get("assets", [])
-            found_files = [a['name'] for a in assets if any(a['name'].lower().endswith(ext) for ext in signature_exts)]
-            results.append({
-                "tag": tag,
-                "release_name": release_name,
-                "signature_files": found_files,
-                "error": None
-            })
-        return {"is_released": bool(results), "signed_files": results}, None
-
-    elif "gitee.com" in project_url:
-        url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/releases"
-        response = requests.get(url)
-        if response.status_code == 200:
-            releases = response.json()
-            if not releases:
-                return {"is_released": False, "signed_files": []}, "No releases found"
-        else:
-            logging.error(f"Failed to get releases for repo: {project_url} \n Error: Not found")
-            return {"is_released": False, "signed_files": []}, "Not found"
-        for rel in releases:
-            tag = rel.get("tag_name", "")
-            release_name = rel.get("name", tag)
-            assets = rel.get("assets", [])
-            found_files = [a['name'] for a in assets if any(a['name'].lower().endswith(ext) for ext in signature_exts)]
-            results.append({
-                "tag": tag,
-                "release_name": release_name,
-                "signature_files": found_files,
-                "error": None
-            })
-        return {"is_released": bool(results), "signed_files": results}, None
-
-    else:
-        logging.info(f"Failed to do signed files check for repo: {project_url} \n Error: Not supported platform.")
-        return {"is_released": False, "signed_files": []}, "Not supported platform."
+    for rel in all_releases:
+        if rel.get('draft', False) or rel.get('prerelease', False):
+            continue
+        tag = rel.get("tag_name", "")
+        release_name = rel.get("name", tag)
+        assets = rel.get("assets", [])
+        found_files = [a['name'] for a in assets if any(a['name'].lower().endswith(ext) for ext in signature_exts)]
+        results.append({
+            "tag": tag,
+            "release_name": release_name,
+            "signature_files": found_files,
+            "error": None
+        })
+    return {"is_released": bool(results), "signed_files": results}, None
 
 def callback_func(ch, method, properties, body):
 
