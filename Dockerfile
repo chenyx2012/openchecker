@@ -72,10 +72,24 @@ RUN cd /opt && git clone --depth=1 https://github.com/Laniakea2012/ohpm_cli_tool
     ln -s /opt/ohpm_cli_tool/bin/ohpm /usr/bin/ohpm && \
     ln -s /opt/ohpm_cli_tool/bin/pm-cli.js /usr/bin/pm-cli.js
 
+# Install scorecard
+RUN cd /opt && wget https://github.com/ossf/scorecard/releases/download/v5.2.1/scorecard_5.2.1_linux_amd64.tar.gz && \
+    tar -xvzf scorecard_5.2.1_linux_amd64.tar.gz && \
+    ln -s /opt/scorecard /usr/bin/scorecard && \
+    rm scorecard_5.2.1_linux_amd64.tar.gz
+
+# Install cloc
+RUN apt install cloc
+
 COPY . .
 RUN chmod a+x scripts/entrypoint.sh && \
     pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && \
     pip install --upgrade urllib3
+
+# Install criticality
+RUN pip install criticality_score 
+    && cp -f openchecker/criticality/run.py  /python3.9/site-packages/criticality_score/run.py
+
 
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
 CMD ["python", "openchecker/main.py"]

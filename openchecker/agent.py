@@ -1,3 +1,4 @@
+import random
 import subprocess
 from message_queue import consumer
 from helper import read_config
@@ -17,6 +18,18 @@ from urllib.parse import urlparse
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
 
 config = read_config('config/config.ini')
+
+USER_AGENT = [
+    'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36 OPR/26.0.1656.60',
+    'Opera/8.0 (Windows NT 5.1; U; en)',
+    'Mozilla/5.0 (Windows NT 5.1; U; en; rv:1.8.1) Gecko/20061208 Firefox/2.0.0 Opera 9.50',
+    'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; en) Opera 9.50',
+    'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.11 (KHTML, like Gecko) Chrome/23.0.1271.64 Safari/537.11',
+    'Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/534.16 (KHTML, like Gecko) Chrome/10.0.648.133 Safari/534.16',
+    'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:34.0) Gecko/20100101 Firefox/34.0',
+    'Mozilla/5.0 (X11; U; Linux x86_64; zh-CN; rv:1.9.2.10) Gecko/20100922 Ubuntu/10.10 (maverick) Firefox/3.6.10'
+]
 
 def get_licenses_name(data):
     return next(
@@ -890,6 +903,46 @@ def callback_func(ch, method, properties, body):
                         "status_code": 500,
                         "error": json.dumps(error.decode("utf-8"))
                     }
+        elif command == 'criticality-score':
+            result, error = run_criticality_score(project_url)
+            if error == None:
+                logging.info("criticality-score job done: {}".format(project_url))
+                res_payload["scan_results"]["criticality-score"] = result
+            else:
+                logging.error("criticality-score job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["criticality-score"] = {"error": error}
+        elif command == 'scorecard-score':
+            result, error = run_scorecard_cli(project_url)
+            if error == None:
+                logging.info("scorecard-score job done: {}".format(project_url))
+                res_payload["scan_results"]["scorecard-score"] = result
+            else:
+                logging.error("scorecard-score job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["scorecard-score"] = {"error": error}
+        elif command == 'code-count':
+            result, error = get_code_count(project_url)
+            if error == None:
+                logging.info("code-count job done: {}".format(project_url))
+                res_payload["scan_results"]["code-count"] = result
+            else:
+                logging.error("code-count job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["code-count"] = {"error": error}
+        elif command == 'package-info':
+            result, error = get_package_info(project_url)
+            if error == None:
+                logging.info("package-info job done: {}".format(project_url))
+                res_payload["scan_results"]["package-info"] = result
+            else:
+                logging.error("package-info job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["package-info"] = {"error": error}
+        elif command == 'ohpm-info':
+            result, error = get_ohpm_info(project_url)
+            if error == None:
+                logging.info("ohpm-info job done: {}".format(project_url))
+                res_payload["scan_results"]["ohpm-info"] = result
+            else:
+                logging.error("ohpm-info job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["ohpm-info"] = {"error": error}
         else:
             logging.info(f"Unknown command: {command}")
 
@@ -921,6 +974,223 @@ def callback_func(ch, method, properties, body):
 
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
+def run_criticality_score(project_url):
+    cmd = ["criticality_score", "--repo", project_url, "--format", "json"]
+    github_token = config["Github"]["access_key"]
+    os.environ['GITHUB_AUTH_TOKEN'] = github_token
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        json_str = result.stderr
+        json_str = json_str.replace("\n", "")
+        pattern = r'{.*?}'
+        match = re.search(pattern, json_str)
+        json_res = {}
+        if match:
+            json_score = match.group()
+            json_res = json.loads(json_score)
+            criticality_score = json_res['criticality_score']
+            return criticality_score, None
+    else:
+        return False, "URL is not supported by criticality score."
+
+def run_scorecard_cli(project_url):
+    cmd = ["scorecard", "--repo", project_url, "--format", "json"]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        scorecard_json = json.loads(result.stdout)
+        scorecard_json = simplify_scorecard(scorecard_json)
+        return scorecard_json, None
+    else:
+        return False, "URL is not supported by scorecard CLI."
+
+def simplify_scorecard(data):
+    simplified = {
+        "score": data["score"],
+        "checks": []
+    }
+    if data["checks"] is not None:
+        for check in data["checks"]:
+            simplified_check = {
+                "name": check["name"],
+                "score": check["score"]
+            }
+            simplified["checks"].append(simplified_check)
+    
+    return simplified
+
+def get_code_count(project_url):
+    project_name = os.path.basename(project_url).replace('.git', '')
+
+    if not os.path.exists(project_name):
+        subprocess.run(["git", "clone", project_url, "--depth=1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    repo_path = os.path.join(project_name)
+    cmd = ["cloc", repo_path, "--json"] 
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        if result.stdout.strip() == "":
+            return 0, None
+        result_json = json.loads(result.stdout)
+        code_count = result_json['SUM']['code']
+        return code_count, None
+    else:
+        return False, "Failed to get code count."
+
+def get_package_info(project_url):
+    urlList = project_url.split("/")
+    package_name = urlList[len(urlList) - 1]
+    url = f"https://registry.npmjs.org/{package_name}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        response.raise_for_status()  # 自动处理 HTTP 错误
+        data = response.json()
+        ##功能描述
+        description =  data['description']
+        ##官网地址
+        home_url = data['homepage']
+        ##依赖
+        version_data = data["versions"]
+        *_, last_version = version_data.items()
+        dependency = last_version[1].get("dependencies", {})
+        dependent_count = len(dependency)
+        ##下载量
+        url_down = f"https://api.npmjs.org/downloads/range/last-month/{package_name}"
+        response_down = requests.get(url_down)
+        down_data = response_down.json()
+        last_month = down_data['downloads']
+        down_count = 0
+        for ch in last_month:
+            down_count += ch['downloads']
+        day_enter = last_month[0]['day'] + " - " + last_month[len(last_month) - 1]['day']   
+        return {
+            "description": description, 
+            "home_url": home_url, 
+            "dependent_count": dependent_count, 
+            "down_count": down_count, 
+            "day_enter": day_enter
+            }, None
+    else:
+        # 调用api
+        domain_name = urlList[2]
+        owner_name = urlList[3]
+        repo_name = urlList[4]   
+        description = ''
+        home_url = ''
+        down_count = ''
+        day_enter = '' 
+        if  'gitee' in domain_name.lower():
+            authorToken = config["Gitee"]["access_key"]
+            url = 'https://gitee.com/api/v5/repos/'+owner_name+'/'+repo_name+'?access_token='+authorToken.strip()
+            response = requests.get(
+                url,
+                headers = {'User-Agent': random.choice(USER_AGENT)}
+            )
+            if response.status_code == 200:
+                repo_json = json.loads(response.text)
+                home_url = repo_json['homepage']
+                description =  repo_json['description']      
+            elif response.status_code == 403:
+                logging.error("Failed to get description and home_url for repo: {} \n Error: Gitee token limit")
+                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
+            else:
+                logging.error("Failed to get description and home_url for repo: {} \n Error: {}".format(project_url, "Not found"))
+                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
+        elif 'github' in domain_name.lower():
+            authorToken = config["Github"]["access_key"]
+            url = 'https://api.github.com/repos/'+owner_name+'/'+repo_name
+            response = requests.get(
+                url,
+                headers = {
+                    'User-Agent': random.choice(USER_AGENT),
+                    'Accept' : 'application/vnd.github+json',
+                    'Authorization':'Bearer ' + authorToken
+                }
+            )         
+            if response.status_code == 200:
+                repo_json = json.loads(response.text)
+                home_url = repo_json['homepage']
+                description =  repo_json['description']
+            elif response.status_code == 403:
+                logging.error("Failed to get description and home_url for repo: {} \n Error: Github token limit")
+                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
+            else:
+                logging.error("Failed to get description and home_url for repo: {} \n Error: {}".format(project_url, "Not found"))
+                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
+        elif 'gitcode' in domain_name.lower():
+            authorToken = config["Gitcode"]["access_key"]
+            url = 'https://api.gitcode.com/api/v5/repos/'+owner_name+'/'+repo_name+'/download_statistics?access_token='+authorToken.strip()
+            response = requests.get(
+                url,
+                headers = {'User-Agent': random.choice(USER_AGENT)}
+            )         
+            if response.status_code == 200:
+                down_json = json.loads(response.text)
+                down_list = down_json['download_statistics_detail']
+                down_count = 0
+                for ch in down_list:
+                    down_count += ch['today_dl_cnt']
+                day_enter = down_list[len(down_list) - 1]['pdate'] + " - " + down_list[0]['pdate'] 
+            elif response.status_code == 403:
+                logging.error("Failed to get down_count for repo: {} \n Error: Gitcode token limit")
+                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
+            else:
+                logging.error("Failed to get down_count for repo: {} \n Error: {}".format(project_url, "Not found"))
+                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
+             
+            ##描述
+            repo_url = 'https://api.gitcode.com/api/v5/repos/'+owner_name+'/'+repo_name+'?access_token='+authorToken.strip()
+            repo_response = requests.get(
+                repo_url,
+                headers = {'User-Agent': random.choice(USER_AGENT)}
+            )         
+            if repo_response.status_code == 200:
+                repo_json = json.loads(repo_response.text)
+                description =  repo_json['description'] 
+            elif repo_response.status_code == 403:
+                logging.error("Failed to get description for repo: {} \n Error: Gitcode token limit")
+                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
+            else:
+                logging.error("Failed to get description for repo: {} \n Error: {}".format(project_url, "Not found"))
+                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
+            
+        return {
+            "description": description, 
+            "home_url": home_url, 
+            "dependent_count": False, 
+            "down_count": down_count, 
+            "day_enter": day_enter
+            }, None
+
+def get_ohpm_info(project_url):
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        abs_dir = os.path.dirname(script_dir)
+        file_path = os.path.join(abs_dir, 'config', 'ohpm_repo.json')
+        with open(file_path, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+        project_url = project_url.replace('.git', '')
+        for name, repo_address in data.items():
+            if repo_address.lower() == project_url.lower():
+                url = 'https://ohpm.openharmony.cn/ohpmweb/registry/oh-package/openapi/v1/detail/'+ name
+                response = requests.get(
+                    url,
+                    headers = {'User-Agent': random.choice(USER_AGENT)}
+                )
+                if response.status_code == 200:
+                    repo_body = json.loads(response.text)
+                    repo_json = repo_body['body']
+                    down_count = repo_json['downloads']
+                    dependent =  repo_json['dependencies']['total']
+                    bedependent = repo_json['dependent']['total']
+                    return {"down_count": down_count, "dependent": dependent, "bedependent": bedependent}, None
+                else:
+                    logging.error("Failed to get dependent、bedependent、down_count for repo: {} \n Error: {}".format(project_url, "Not found"))
+                    return {"down_count": False, "dependent": False, "bedependent": False}, "Not found"
+        return {"down_count": "", "dependent": "", "bedependent": ""}, None
+    except Exception as e:
+        logging.error("parse_oat_txt error: {}".format(e))
+        return e
+
 if __name__ == "__main__":
     consumer(config["RabbitMQ"], "opencheck", callback_func)
     logging.info('Agents server ended.')
+    # get_package_info("https://github.com/jshttp/mime-types")
