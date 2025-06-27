@@ -221,6 +221,34 @@ def check_doc_content(project_url, type):
     return build_doc_file, None
 
 def check_release_notes(project_url):
+    """
+    检查指定项目所有 release 包中是否包含 release notes 文件。
+
+    功能说明：
+    - 支持 GitHub 和 Gitee 平台。
+    - 遍历所有 release，下载每个 release 的归档包（zipball）。
+    - 检查归档包内是否存在 changelog、releasenotes、release_notes、release 等命名的文件。
+    - 返回每个 release 是否包含 release notes 文件及其文件名列表。
+
+    参数：
+        project_url (str): 项目的仓库地址，支持 GitHub 和 Gitee。
+
+    返回：
+        tuple: (result_dict, error)
+            result_dict: {
+                "is_released": bool,  # 是否有 release
+                "release_notes": [
+                    {
+                        "tag": 版本号,
+                        "release_name": release名称,
+                        "has_release_notes": 是否有release notes文件,
+                        "release_notes_files": 文件名列表,
+                        "error": None或错误信息
+                    }, ...
+                ]
+            }
+            error: None 或错误信息字符串
+    """
     owner_name = re.match(r"https://(?:github|gitee|gitcode).com/([^/]+)/", project_url).group(1)
     repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
 
@@ -343,104 +371,78 @@ def check_release_notes(project_url):
 
 def check_signed_release(project_url):
     """
-    检查GitHub项目最近30个release的签名文件，评分规则：
-    - 每个release都包含签名文件（.minisig, .asc, .sig, .sign, .sigstore, .intoto.jsonl）得8分
-    - 每个release都包含.intoto.jsonl（SLSA provenance）得10分
-    - 只要有release缺少签名文件则降分
-    - 只支持github.com
+    检查所有release的assets中是否包含签名文件，支持github.com和gitee.com。
     返回：{
-        'score': int,  # 0-10
-        'total_releases': int,
-        'checked_releases': int,
-        'signed_releases': int,
-        'slsa_releases': int,
-        'details': list,  # 每个release的签名文件详情
-        'error': str or None
+        'is_released': bool,  # 是否有release
+        'signed_files': [
+            {
+                'tag': tag,
+                'release_name': release_name,
+                'signature_files': [文件名列表],
+                'error': None或错误信息
+            }, ...
+        ]
     }, None or error
     """
     signature_exts = [
         ".minisig", ".asc", ".sig", ".sign", ".sigstore", ".intoto.jsonl"
     ]
-    slsa_ext = ".intoto.jsonl"
-    if not project_url.startswith("https://github.com/"):
-        return {
-            'score': 0,
-            'total_releases': 0,
-            'checked_releases': 0,
-            'signed_releases': 0,
-            'slsa_releases': 0,
-            'details': [],
-            'error': "只支持github.com仓库"
-        }, "Not supported platform."
-    try:
-        m = re.match(r"https://github.com/([^/]+)/([^/]+)", project_url)
-        if not m:
-            return {
-                'score': 0,
-                'total_releases': 0,
-                'checked_releases': 0,
-                'signed_releases': 0,
-                'slsa_releases': 0,
-                'details': [],
-                'error': "URL格式错误"
-            }, "URL format error"
-        owner, repo = m.group(1), m.group(2).replace('.git', '')
-        api = GhApi(owner=owner, repo=repo)
-        releases = api.repos.list_releases(owner=owner, repo=repo, per_page=30)
-        total = len(releases)
-        checked = 0
-        signed = 0
-        slsa = 0
-        details = []
-        for rel in releases:
-            # 跳过自动生成的source code-only release
+    owner_name = re.match(r"https://(?:github|gitee|gitcode).com/([^/]+)/", project_url).group(1)
+    repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
+    results = []
+
+    if "github.com" in project_url:
+        api = GhApi(owner=owner_name, repo=repo_name)
+        try:
+            all_releases = []
+            for page in paged(api.repos.list_releases, owner_name, repo_name, per_page=10):
+                all_releases.extend(page)
+            if not all_releases:
+                return {"is_released": False, "signed_files": []}, "No releases found"
+        except Exception as e:
+            logging.error(f"Failed to get releases for repo: {project_url} \n Error: {e}")
+            return {"is_released": False, "signed_files": []}, f"failed to get releases for repo: {project_url}"
+        for rel in all_releases:
             if rel.get('draft', False) or rel.get('prerelease', False):
                 continue
-            assets = rel.get('assets', [])
-            asset_names = [a['name'] for a in assets]
-            has_signature = any(any(name.lower().endswith(ext) for ext in signature_exts) for name in asset_names)
-            has_slsa = any(name.lower().endswith(slsa_ext) for name in asset_names)
-            details.append({
-                'tag_name': rel.get('tag_name'),
-                'name': rel.get('name'),
-                'assets': asset_names,
-                'has_signature': has_signature,
-                'has_slsa': has_slsa
+            tag = rel.get("tag_name", "")
+            release_name = rel.get("name", tag)
+            assets = rel.get("assets", [])
+            found_files = [a['name'] for a in assets if any(a['name'].lower().endswith(ext) for ext in signature_exts)]
+            results.append({
+                "tag": tag,
+                "release_name": release_name,
+                "signature_files": found_files,
+                "error": None
             })
-            checked += 1
-            if has_signature:
-                signed += 1
-            if has_slsa:
-                slsa += 1
-        score = 0
-        if checked == 0:
-            score = 0
-        elif signed == checked:
-            score = 8
-            if slsa == checked:
-                score = 10
+        return {"is_released": bool(results), "signed_files": results}, None
+
+    elif "gitee.com" in project_url:
+        url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/releases"
+        response = requests.get(url)
+        if response.status_code == 200:
+            releases = response.json()
+            if not releases:
+                return {"is_released": False, "signed_files": []}, "No releases found"
         else:
-            score = int(8 * signed / checked)
-        return {
-            'score': score,
-            'total_releases': total,
-            'checked_releases': checked,
-            'signed_releases': signed,
-            'slsa_releases': slsa,
-            'details': details,
-            'error': None
-        }, None
-    except Exception as e:
-        logging.error(f"checker_signed_release error: {e}")
-        return {
-            'score': 0,
-            'total_releases': 0,
-            'checked_releases': 0,
-            'signed_releases': 0,
-            'slsa_releases': 0,
-            'details': [],
-            'error': str(e)
-        }, str(e)
+            logging.error(f"Failed to get releases for repo: {project_url} \n Error: Not found")
+            return {"is_released": False, "signed_files": []}, "Not found"
+        for rel in releases:
+            tag = rel.get("tag_name", "")
+            release_name = rel.get("name", tag)
+            assets = rel.get("assets", [])
+            found_files = [a['name'] for a in assets if any(a['name'].lower().endswith(ext) for ext in signature_exts)]
+            results.append({
+                "tag": tag,
+                "release_name": release_name,
+                "signature_files": found_files,
+                "error": None
+            })
+        return {"is_released": bool(results), "signed_files": results}, None
+
+    else:
+        logging.info(f"Failed to do signed files check for repo: {project_url} \n Error: Not supported platform.")
+        return {"is_released": False, "signed_files": []}, "Not supported platform."
 
 def callback_func(ch, method, properties, body):
 
