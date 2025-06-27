@@ -327,8 +327,8 @@ def check_release_notes(project_url):
                 })
                 continue
             with zipfile.ZipFile(io.BytesIO(response.content), 'r') as zip_ref:
-                changelog_names = ["changelog", "releasenotes", "release_notes", "release"]
-                found_files = [file for file in zip_ref.namelist() if any(name in os.path.basename(file).lower() for name in changelog_names)]
+                changelog_names = ["changelog", "releasenotes", "release_notes", "release", "release-notes"]
+                found_files = [file for file in zip_ref.namelist() if any(name == os.path.basename(file).lower() for name in changelog_names)]
                 results.append({
                     "tag": tag,
                     "release_name": release_name,
@@ -410,57 +410,57 @@ def callback_func(ch, method, properties, body):
     }
 
     # download source code of the project
-    # shell_script=f"""
-    #             project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-    #             if [ ! -e "$project_name" ]; then
-    #                 GIT_ASKPASS=/bin/true git clone {project_url}
-    #             fi
+    shell_script=f"""
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                if [ ! -e "$project_name" ]; then
+                    GIT_ASKPASS=/bin/true git clone {project_url}
+                fi
 
-    #             cd "$project_name"
+                cd "$project_name"
 
-    #             if [ {version_number} != "None" ]; then
-    #                 # 检查版本号是否在git仓库的tag中
-    #                 if git tag | grep -q "^$version_number$"; then
-    #                     # 切换到对应的tag
-    #                     git checkout "$version_number"
-    #                     if [ $? -eq 0 ]; then
-    #                         echo "成功切换到标签 $version_number"
-    #                     else
-    #                         echo "切换到标签 $version_number 失败"
-    #                     fi
-    #                 fi
-    #             fi
-    #         """
+                if [ {version_number} != "None" ]; then
+                    # 检查版本号是否在git仓库的tag中
+                    if git tag | grep -q "^$version_number$"; then
+                        # 切换到对应的tag
+                        git checkout "$version_number"
+                        if [ $? -eq 0 ]; then
+                            echo "成功切换到标签 $version_number"
+                        else
+                            echo "切换到标签 $version_number 失败"
+                        fi
+                    fi
+                fi
+            """
 
-    # result, error = shell_exec(shell_script)
+    result, error = shell_exec(shell_script)
 
-    # if error == None:
-    #     logging.info("download source code done: {}".format(project_url))
-    # else:
-    #     logging.info("download source code failed: {}, error: {}".format(project_url, error))
-    #     logging.info("put messages to dead letters: {}".format(body))
-    #     ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-    #     return
+    if error == None:
+        logging.info("download source code done: {}".format(project_url))
+    else:
+        logging.info("download source code failed: {}, error: {}".format(project_url, error))
+        logging.info("put messages to dead letters: {}".format(body))
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+        return
 
-    # ## Generate the lock files, which would be used by the osv-scanner and ort tools.
-    # shell_script=f"""
-    #             project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-    #             if [ -e "$project_name/package.json" ] && [ ! -e "$project_name/package-lock.json" ]; then
-    #                 cd $project_name && npm install && rm -fr node_modules > /dev/null
-    #                 echo "Generate lock files for $project_name with command npm."
-    #             fi
-    #             if [ -e "$project_name/oh-package.json5" ] && [ ! -e "$project_name/oh-package-lock.json5" ]; then
-    #                 cd $project_name && ohpm install && rm -fr oh_modules > /dev/null
-    #                 echo "Generate lock files for $project_name with command ohpm."
-    #             fi
-    #         """
+    ## Generate the lock files, which would be used by the osv-scanner and ort tools.
+    shell_script=f"""
+                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+                if [ -e "$project_name/package.json" ] && [ ! -e "$project_name/package-lock.json" ]; then
+                    cd $project_name && npm install && rm -fr node_modules > /dev/null
+                    echo "Generate lock files for $project_name with command npm."
+                fi
+                if [ -e "$project_name/oh-package.json5" ] && [ ! -e "$project_name/oh-package-lock.json5" ]; then
+                    cd $project_name && ohpm install && rm -fr oh_modules > /dev/null
+                    echo "Generate lock files for $project_name with command ohpm."
+                fi
+            """
 
-    # result, error = shell_exec(shell_script)
+    result, error = shell_exec(shell_script)
 
-    # if error == None:
-    #     logging.info("Lock files generation job done: {}".format(result.decode('utf-8') if bool(result) else "No lock files generated."))
-    # else:
-    #     logging.error("Lock files generation job failed: {}, error: {}".format(project_url, error))
+    if error == None:
+        logging.info("Lock files generation job done: {}".format(result.decode('utf-8') if bool(result) else "No lock files generated."))
+    else:
+        logging.error("Lock files generation job failed: {}, error: {}".format(project_url, error))
 
     for command in command_list:
         if command == 'osv-scanner':
@@ -546,14 +546,22 @@ def callback_func(ch, method, properties, body):
 
         elif command == 'release-checker':
 
-            result, error = check_release_notes(project_url)
+            release_notes_result, error = check_release_notes(project_url)
 
             if error == None:
                 logging.info("release-checker job done: {}".format(project_url))
-                res_payload["scan_results"]["release-checker"] = result
+                res_payload["scan_results"]["release-checker"] = release_notes_result
             else:
                 logging.error("release-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["release-checker"] = {"error": error}
+
+            # signed_release_result, error = check_signed_release(project_url)
+            # if error == None:
+            #     logging.info("signed-release-checker job done: {}".format(project_url))
+            #     res_payload["scan_results"]["signed-release-checker"] = signed_release_result
+            # else:
+            #     logging.error("signed-release-checker job failed: {}, error: {}".format(project_url, error))
+            #     res_payload["scan_results"]["signed-release-checker"] = {"error": error}
 
         elif command == 'url-checker':
             from urllib import request
