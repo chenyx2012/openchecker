@@ -8,7 +8,7 @@ import requests
 import re
 import time
 import os
-from ghapi.all import GhApi
+from ghapi.all import GhApi, paged
 import zipfile
 import io
 import logging
@@ -220,54 +220,227 @@ def check_doc_content(project_url, type):
                 return build_doc_file, None
     return build_doc_file, None
 
-def check_release_content(project_url):
+def check_release_notes(project_url):
     owner_name = re.match(r"https://(?:github|gitee|gitcode).com/([^/]+)/", project_url).group(1)
     repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
 
+    results = []
     if "github.com" in project_url:
         api = GhApi(owner=owner_name, repo=repo_name)
         try:
-            latest_release = api.repos.get_latest_release()
+            all_releases = []
+            for page in paged(api.repos.list_releases, owner_name, repo_name, per_page=10):
+                all_releases.extend(page)
+ 
+            if not all_releases:
+                return {"is_released": False, "release_notes": []}, "No releases found"
         except Exception as e:
-            logging.error("Failed to get latest release for repo: {} \n Error: {}".format(project_url, e))
-            return {"is_released": False, "signature_files": [], "release_notes": []}, "Not found"
+            logging.error("Failed to get releases for repo: {} \n Error: {}".format(project_url, e))
+            return {"is_released": False, "release_notes": []}, "Not found"
 
-        latest_release_url = latest_release["zipball_url"]
+        for rel in all_releases:
+            if rel.get('draft', False) or rel.get('prerelease', False):
+                continue
+
+            tag = rel.get("tag_name", "")
+            zip_url = rel.get("zipball_url", None)
+            release_id = rel.get("id", None)
+            release_name = rel.get("name", tag)
+            if not zip_url:
+                results.append({
+                    "tag": tag,
+                    "release_name": release_name,
+                    "has_release_notes": False,
+                    "release_notes_files": [],
+                    "error": "No zipball_url"
+                })
+                continue
+            try:
+                response = requests.get(zip_url)
+                if response.status_code != 200:
+                    results.append({
+                        "tag": tag,
+                        "release_name": release_name,
+                        "has_release_notes": False,
+                        "release_notes_files": [],
+                        "error": f"Failed to download release zip: {response.status_code}"
+                    })
+                    continue
+                with zipfile.ZipFile(io.BytesIO(response.content), 'r') as zip_ref:
+                    changelog_names = ["changelog", "releasenotes", "release_notes", "release"]
+                    found_files = [file for file in zip_ref.namelist() if any(name in os.path.basename(file).lower() for name in changelog_names)]
+                    results.append({
+                        "tag": tag,
+                        "release_name": release_name,
+                        "has_release_notes": bool(found_files),
+                        "release_notes_files": found_files,
+                        "error": None
+                    })
+            except Exception as e:
+                results.append({
+                    "tag": tag,
+                    "release_name": release_name,
+                    "has_release_notes": False,
+                    "release_notes_files": [],
+                    "error": f"Failed to check release zip."
+                })
+        return {"is_released": bool(results), "release_notes": results}, None
 
     elif "gitee.com" in project_url:
-        url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/releases/latest"
+        url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/releases"
         try:
             response = requests.get(url)
             if response.status_code == 200:
-                tag_name = response.json()["tag_name"]
-                access_token = config["Gitee"]["access_key"]
-                # latest_release_url = response.json()["assets"][0]["browser_download_url"]
-                latest_release_url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/zipball?access_token={access_token}&ref={tag_name}"
+                releases = response.json()
+                if not releases:
+                    return {"is_released": False, "release_notes": []}, "No releases found"
             else:
-                logging.error("Failed to get latest release for repo: {} \n Error: {}".format(project_url, "Not found"))
-                return {"is_released": False, "signature_files": [], "release_notes": []}, "Not found"
+                logging.error("Failed to get releases for repo: {} \n Error: {}".format(project_url, "Not found"))
+                return {"is_released": False, "release_notes": []}, "Not found"
         except Exception as e:
-            logging.error("Failed to get latest release for repo: {} \n Error: {}".format(project_url, e))
-            return {"is_released": False, "signature_files": [], "release_notes": []}, "Not found"
+            logging.error("Failed to get releases for repo: {} \n Error: {}".format(project_url, e))
+            return {"is_released": False, "release_notes": []}, "Not found"
+
+        access_token = config["Gitee"]["access_key"]
+        for rel in releases:
+            tag = rel.get("tag_name", "")
+            release_name = rel.get("name", tag)
+            zip_url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/zipball?access_token={access_token}&ref={tag}"
+            try:
+                response = requests.get(zip_url)
+                if response.status_code != 200:
+                    results.append({
+                        "tag": tag,
+                        "release_name": release_name,
+                        "has_release_notes": False,
+                        "release_notes_files": [],
+                        "error": f"Failed to download release zip: {response.status_code}"
+                    })
+                    continue
+                with zipfile.ZipFile(io.BytesIO(response.content), 'r') as zip_ref:
+                    changelog_names = ["changelog", "releasenotes", "release_notes", "release"]
+                    found_files = [file for file in zip_ref.namelist() if any(name in os.path.basename(file).lower() for name in changelog_names)]
+                    results.append({
+                        "tag": tag,
+                        "release_name": release_name,
+                        "has_release_notes": bool(found_files),
+                        "release_notes_files": found_files,
+                        "error": None
+                    })
+            except Exception as e:
+                results.append({
+                    "tag": tag,
+                    "release_name": release_name,
+                    "has_release_notes": False,
+                    "release_notes_files": [],
+                    "error": f"Failed to check release zip."
+                })
+        return {"is_released": bool(results), "release_notes": results}, None
 
     else:
         logging.info("Failed to do release files check for repo: {} \n Error: {}".format(project_url, "Not supported platform."))
-        return {"is_released": False, "signature_files": [], "release_notes": []}, "Not supported platform."
+        return {"is_released": False, "release_notes": []}, "Not supported platform."
 
-    response = requests.get(latest_release_url)
-    if response.status_code != 200:
-        return {"is_released": True, "signature_files": [], "release_notes": []}, "Failed to download release."
-
-    signature_files = []
-    changelog_files = []
-    with zipfile.ZipFile(io.BytesIO(response.content), 'r') as zip_ref:
-        signature_suffixes = ["*.asc", "*.sig", "*.cer", "*.crt", "*.pem", "*.sha256", "*.sha512"]
-        signature_files = [ file for file in zip_ref.namelist() if any(file.lower().endswith(suffix) for suffix in signature_suffixes) ]
-
-        changelog_names = ["changelog", "releasenotes", "release_notes"]
-        changelog_files = [ file for file in zip_ref.namelist() if any(name in os.path.basename(file).lower() for name in changelog_names)]
-
-    return {"is_released": True, "signature_files": signature_files, "release_notes": changelog_files}, None
+def check_signed_release(project_url):
+    """
+    检查GitHub项目最近30个release的签名文件，评分规则：
+    - 每个release都包含签名文件（.minisig, .asc, .sig, .sign, .sigstore, .intoto.jsonl）得8分
+    - 每个release都包含.intoto.jsonl（SLSA provenance）得10分
+    - 只要有release缺少签名文件则降分
+    - 只支持github.com
+    返回：{
+        'score': int,  # 0-10
+        'total_releases': int,
+        'checked_releases': int,
+        'signed_releases': int,
+        'slsa_releases': int,
+        'details': list,  # 每个release的签名文件详情
+        'error': str or None
+    }, None or error
+    """
+    signature_exts = [
+        ".minisig", ".asc", ".sig", ".sign", ".sigstore", ".intoto.jsonl"
+    ]
+    slsa_ext = ".intoto.jsonl"
+    if not project_url.startswith("https://github.com/"):
+        return {
+            'score': 0,
+            'total_releases': 0,
+            'checked_releases': 0,
+            'signed_releases': 0,
+            'slsa_releases': 0,
+            'details': [],
+            'error': "只支持github.com仓库"
+        }, "Not supported platform."
+    try:
+        m = re.match(r"https://github.com/([^/]+)/([^/]+)", project_url)
+        if not m:
+            return {
+                'score': 0,
+                'total_releases': 0,
+                'checked_releases': 0,
+                'signed_releases': 0,
+                'slsa_releases': 0,
+                'details': [],
+                'error': "URL格式错误"
+            }, "URL format error"
+        owner, repo = m.group(1), m.group(2).replace('.git', '')
+        api = GhApi(owner=owner, repo=repo)
+        releases = api.repos.list_releases(owner=owner, repo=repo, per_page=30)
+        total = len(releases)
+        checked = 0
+        signed = 0
+        slsa = 0
+        details = []
+        for rel in releases:
+            # 跳过自动生成的source code-only release
+            if rel.get('draft', False) or rel.get('prerelease', False):
+                continue
+            assets = rel.get('assets', [])
+            asset_names = [a['name'] for a in assets]
+            has_signature = any(any(name.lower().endswith(ext) for ext in signature_exts) for name in asset_names)
+            has_slsa = any(name.lower().endswith(slsa_ext) for name in asset_names)
+            details.append({
+                'tag_name': rel.get('tag_name'),
+                'name': rel.get('name'),
+                'assets': asset_names,
+                'has_signature': has_signature,
+                'has_slsa': has_slsa
+            })
+            checked += 1
+            if has_signature:
+                signed += 1
+            if has_slsa:
+                slsa += 1
+        score = 0
+        if checked == 0:
+            score = 0
+        elif signed == checked:
+            score = 8
+            if slsa == checked:
+                score = 10
+        else:
+            score = int(8 * signed / checked)
+        return {
+            'score': score,
+            'total_releases': total,
+            'checked_releases': checked,
+            'signed_releases': signed,
+            'slsa_releases': slsa,
+            'details': details,
+            'error': None
+        }, None
+    except Exception as e:
+        logging.error(f"checker_signed_release error: {e}")
+        return {
+            'score': 0,
+            'total_releases': 0,
+            'checked_releases': 0,
+            'signed_releases': 0,
+            'slsa_releases': 0,
+            'details': [],
+            'error': str(e)
+        }, str(e)
 
 def callback_func(ch, method, properties, body):
 
@@ -291,57 +464,57 @@ def callback_func(ch, method, properties, body):
     }
 
     # download source code of the project
-    shell_script=f"""
-                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-                if [ ! -e "$project_name" ]; then
-                    GIT_ASKPASS=/bin/true git clone {project_url}
-                fi
+    # shell_script=f"""
+    #             project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+    #             if [ ! -e "$project_name" ]; then
+    #                 GIT_ASKPASS=/bin/true git clone {project_url}
+    #             fi
 
-                cd "$project_name"
+    #             cd "$project_name"
 
-                if [ {version_number} != "None" ]; then
-                    # 检查版本号是否在git仓库的tag中
-                    if git tag | grep -q "^$version_number$"; then
-                        # 切换到对应的tag
-                        git checkout "$version_number"
-                        if [ $? -eq 0 ]; then
-                            echo "成功切换到标签 $version_number"
-                        else
-                            echo "切换到标签 $version_number 失败"
-                        fi
-                    fi
-                fi
-            """
+    #             if [ {version_number} != "None" ]; then
+    #                 # 检查版本号是否在git仓库的tag中
+    #                 if git tag | grep -q "^$version_number$"; then
+    #                     # 切换到对应的tag
+    #                     git checkout "$version_number"
+    #                     if [ $? -eq 0 ]; then
+    #                         echo "成功切换到标签 $version_number"
+    #                     else
+    #                         echo "切换到标签 $version_number 失败"
+    #                     fi
+    #                 fi
+    #             fi
+    #         """
 
-    result, error = shell_exec(shell_script)
+    # result, error = shell_exec(shell_script)
 
-    if error == None:
-        logging.info("download source code done: {}".format(project_url))
-    else:
-        logging.info("download source code failed: {}, error: {}".format(project_url, error))
-        logging.info("put messages to dead letters: {}".format(body))
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
-        return
+    # if error == None:
+    #     logging.info("download source code done: {}".format(project_url))
+    # else:
+    #     logging.info("download source code failed: {}, error: {}".format(project_url, error))
+    #     logging.info("put messages to dead letters: {}".format(body))
+    #     ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+    #     return
 
-    ## Generate the lock files, which would be used by the osv-scanner and ort tools.
-    shell_script=f"""
-                project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
-                if [ -e "$project_name/package.json" ] && [ ! -e "$project_name/package-lock.json" ]; then
-                    cd $project_name && npm install && rm -fr node_modules > /dev/null
-                    echo "Generate lock files for $project_name with command npm."
-                fi
-                if [ -e "$project_name/oh-package.json5" ] && [ ! -e "$project_name/oh-package-lock.json5" ]; then
-                    cd $project_name && ohpm install && rm -fr oh_modules > /dev/null
-                    echo "Generate lock files for $project_name with command ohpm."
-                fi
-            """
+    # ## Generate the lock files, which would be used by the osv-scanner and ort tools.
+    # shell_script=f"""
+    #             project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
+    #             if [ -e "$project_name/package.json" ] && [ ! -e "$project_name/package-lock.json" ]; then
+    #                 cd $project_name && npm install && rm -fr node_modules > /dev/null
+    #                 echo "Generate lock files for $project_name with command npm."
+    #             fi
+    #             if [ -e "$project_name/oh-package.json5" ] && [ ! -e "$project_name/oh-package-lock.json5" ]; then
+    #                 cd $project_name && ohpm install && rm -fr oh_modules > /dev/null
+    #                 echo "Generate lock files for $project_name with command ohpm."
+    #             fi
+    #         """
 
-    result, error = shell_exec(shell_script)
+    # result, error = shell_exec(shell_script)
 
-    if error == None:
-        logging.info("Lock files generation job done: {}".format(result.decode('utf-8') if bool(result) else "No lock files generated."))
-    else:
-        logging.error("Lock files generation job failed: {}, error: {}".format(project_url, error))
+    # if error == None:
+    #     logging.info("Lock files generation job done: {}".format(result.decode('utf-8') if bool(result) else "No lock files generated."))
+    # else:
+    #     logging.error("Lock files generation job failed: {}, error: {}".format(project_url, error))
 
     for command in command_list:
         if command == 'osv-scanner':
@@ -427,7 +600,7 @@ def callback_func(ch, method, properties, body):
 
         elif command == 'release-checker':
 
-            result, error = check_release_content(project_url)
+            result, error = check_release_notes(project_url)
 
             if error == None:
                 logging.info("release-checker job done: {}".format(project_url))
