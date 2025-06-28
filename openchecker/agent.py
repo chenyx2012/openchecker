@@ -260,92 +260,195 @@ def get_all_releases_with_assets(project_url):
         logging.info(f"Failed to do releases check for repo: {project_url} \n Error: Not supported platform.")
         return [], "Not supported platform."
 
-def check_release_notes(project_url):
+def check_release_contents(project_url, type="notes", check_repo=False):
     """
-    检查指定项目所有 release 包中是否包含 release notes 文件。
+    检查指定项目所有 release 包中是否包含指定类型的内容文件。
 
     功能说明：
     - 支持 GitHub 和 Gitee 平台。
     - 遍历所有 release，下载每个 release 的归档包（zipball）。
-    - 检查归档包内是否存在 changelog、releasenotes、release_notes、release 等命名的文件。
-    - 返回每个 release 是否包含 release notes 文件及其文件名列表。
+    - 根据type参数检查不同类型的内容：
+        - "notes": 检查 changelog、releasenotes、release_notes 等文件
+        - "sbom": 检查 SBOM 文件（CDX、SPDX 格式）
+    - 返回每个 release 是否包含指定内容及其文件名列表。
 
     参数：
         project_url (str): 项目的仓库地址，支持 GitHub 和 Gitee。
+        type (str): 检查类型，"notes" 或 "sbom"，默认为 "notes"。
+        check_repo (bool): 是否同时检查仓库源码，默认为 False。
 
     返回：
         tuple: (result_dict, error)
             result_dict: {
                 "is_released": bool,  # 是否有 release
-                "release_notes": [
+                "release_contents": [
                     {
                         "tag": 版本号,
                         "release_name": release名称,
-                        "has_release_notes": 是否有release notes文件,
-                        "release_notes_files": 文件名列表,
+                        "has_content": 是否有指定内容文件,
+                        "content_files": 文件名列表,
                         "error": None或错误信息
                     }, ...
                 ]
             }
             error: None 或错误信息字符串
     """
-    owner_name = re.match(r"https://(?:github|gitee|gitcode).com/([^/]+)/", project_url).group(1)
-    repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
-    gitee_access_token = config["Gitee"]["access_key"]
+    try:
+        if type not in ["notes", "sbom"]:
+            return {"is_released": False, "release_contents": []}, f"Unsupported type: {type}"
+        
+        owner_match = re.match(r"https://(?:github|gitee|gitcode).com/([^/]+)/", project_url)
+        if not owner_match:
+            return {"is_released": False, "release_contents": []}, "Invalid project URL format"
+        
+        owner_name = owner_match.group(1)
+        repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
+        
+        gitee_access_token = config.get("Gitee", {}).get("access_key", "") if "gitee.com" in project_url else ""
 
-    all_releases, error = get_all_releases_with_assets(project_url)
-    if error:
-        return {"is_released": False, "release_notes": []}, error
+        all_releases, error = get_all_releases_with_assets(project_url)
+        if error:
+            return {"is_released": False, "release_contents": []}, error
 
-    if not all_releases:
-        return {"is_released": False, "release_notes": []}, "No releases found"
+        if not all_releases:
+            return {"is_released": False, "release_contents": []}, "No releases found"
 
-    results = []
-    for rel in all_releases:
-        if rel.get('draft', False) or rel.get('prerelease', False):
-            continue
-        tag = rel.get("tag_name", "")
-        release_name = rel.get("name", tag)
-        zip_url = rel.get("zipball_url", None)  if "github.com" in project_url else f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/zipball?access_token={gitee_access_token}&ref={tag}"
-        if not zip_url:
-            results.append({
-                "tag": tag,
-                "release_name": release_name,
-                "has_release_notes": False,
-                "release_notes_files": [],
-                "error": "No zipball_url"
-            })
-            continue
-        try:
-            response = requests.get(zip_url)
-            if response.status_code != 200:
-                results.append({
-                    "tag": tag,
-                    "release_name": release_name,
-                    "has_release_notes": False,
-                    "release_notes_files": [],
-                    "error": f"Failed to download release zip: {response.status_code}"
-                })
+        file_patterns = _get_file_patterns(type)
+        
+        results = []
+        for rel in all_releases:
+            if rel.get('draft', False) or rel.get('prerelease', False):
                 continue
-            with zipfile.ZipFile(io.BytesIO(response.content), 'r') as zip_ref:
-                changelog_names = ["changelog", "releasenotes", "release_notes", "release", "release-notes"]
-                found_files = [file for file in zip_ref.namelist() if any(name == os.path.basename(file).lower() for name in changelog_names)]
-                results.append({
-                    "tag": tag,
-                    "release_name": release_name,
-                    "has_release_notes": bool(found_files),
-                    "release_notes_files": found_files,
-                    "error": None
-                })
-        except Exception as e:
-            results.append({
-                "tag": tag,
-                "release_name": release_name,
-                "has_release_notes": False,
-                "release_notes_files": [],
-                "error": f"Failed to check release zip."
-            })
-    return {"is_released": bool(results), "release_notes": results}, None
+                
+            tag = rel.get("tag_name", "")
+            release_name = rel.get("name", tag)
+            
+            zip_url = _get_zipball_url(project_url, owner_name, repo_name, tag, gitee_access_token)
+            if not zip_url:
+                results.append(_create_result_entry(tag, release_name, False, [], "No zipball_url"))
+                continue
+            
+            found_files, error_msg = _check_zip_contents(zip_url, file_patterns)
+            results.append(_create_result_entry(tag, release_name, bool(found_files), found_files, error_msg))
+            
+        return {"is_released": bool(results), "release_contents": results}, None
+        
+    except Exception as e:
+        logging.error(f"Release contents check failed for {project_url}: {e}")
+        return {"is_released": False, "release_contents": []}, f"Internal error: {str(e)}"
+
+
+def _get_file_patterns(content_type):
+    """
+    根据内容类型获取文件匹配模式。
+    
+    Args:
+        content_type (str): 内容类型，"notes" 或 "sbom"
+        
+    Returns:
+        list: 文件匹配模式列表
+    """
+    if content_type == "notes":
+        return ["changelog", "releasenotes", "release_notes", "release", "release-notes"]
+    elif content_type == "sbom":
+        return [
+            r'(?i).+\.(cdx\.json|cdx\.xml|spdx|spdx\.json|spdx\.xml|spdx\.y[a?]ml|spdx\.rdf|spdx\.rdf\.xml)'
+        ]
+    else:
+        return []
+
+
+def _get_zipball_url(project_url, owner_name, repo_name, tag, gitee_access_token):
+    """
+    获取zipball下载URL。
+    
+    Args:
+        project_url (str): 项目URL
+        owner_name (str): 所有者名称
+        repo_name (str): 仓库名称
+        tag (str): 标签名称
+        gitee_access_token (str): Gitee访问令牌
+        
+    Returns:
+        str: zipball URL，如果获取失败返回None
+    """
+    if "github.com" in project_url:
+        return f"https://github.com/{owner_name}/{repo_name}/archive/refs/tags/{tag}.zip"
+    
+    elif "gitee.com" in project_url:
+        if gitee_access_token:
+            return f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/zipball?access_token={gitee_access_token}&ref={tag}"
+        else:
+            return f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/zipball?ref={tag}"
+    
+    else:
+        return None
+
+
+def _check_zip_contents(zip_url, file_patterns):
+    """
+    检查zip文件中的内容。
+    
+    Args:
+        zip_url (str): zip文件下载URL
+        file_patterns (list): 文件匹配模式列表
+        
+    Returns:
+        tuple: (found_files, error_msg)
+            found_files: 找到的文件列表
+            error_msg: 错误信息，无错误为None
+    """
+    try:
+        response = requests.get(zip_url, timeout=30)
+        if response.status_code != 200:
+            return [], f"Failed to download release zip: {response.status_code}"
+        
+        with zipfile.ZipFile(io.BytesIO(response.content), 'r') as zip_ref:
+            found_files = []
+            for file_pattern in file_patterns:
+                if isinstance(file_pattern, str):
+                    for file_name in zip_ref.namelist():
+                        base_name = os.path.basename(file_name).lower()
+                        if base_name == file_pattern.lower():
+                            found_files.append(file_name)
+                else:
+                    for file_name in zip_ref.namelist():
+                        if re.match(file_pattern, file_name):
+                            found_files.append(file_name)
+            
+            return found_files, None
+            
+    except requests.exceptions.Timeout:
+        return [], "Download timeout"
+    except requests.exceptions.RequestException as e:
+        return [], f"Download failed: {str(e)}"
+    except zipfile.BadZipFile:
+        return [], "Invalid zip file"
+    except Exception as e:
+        return [], f"Failed to check release zip: {str(e)}"
+
+
+def _create_result_entry(tag, release_name, has_content, content_files, error_msg):
+    """
+    创建结果条目。
+    
+    Args:
+        tag (str): 标签名称
+        release_name (str): 发布名称
+        has_content (bool): 是否有内容
+        content_files (list): 内容文件列表
+        error_msg (str): 错误信息
+        
+    Returns:
+        dict: 结果条目
+    """
+    return {
+        "tag": tag,
+        "release_name": release_name,
+        "has_content": has_content,
+        "content_files": content_files,
+        "error": error_msg
+    }
 
 def check_signed_release(project_url):
     """
@@ -555,22 +658,23 @@ def callback_func(ch, method, properties, body):
 
         elif command == 'release-checker':
 
-            release_notes_result, error = check_release_notes(project_url)
+            for task in ["notes", "sbom"]:
+                content_check_result, error = check_release_contents(project_url, task)
 
+                if error == None:
+                    logging.info("release-checker job done: {}".format(project_url))
+                    res_payload["scan_results"]["release-checker"][task] = content_check_result
+                else:
+                    logging.error("release-checker job failed: {}, error: {}".format(project_url, error))
+                    res_payload["scan_results"]["release-checker"][task] = {"error": error}
+
+            signed_release_result, error = check_signed_release(project_url)
             if error == None:
-                logging.info("release-checker job done: {}".format(project_url))
-                res_payload["scan_results"]["release-checker"] = release_notes_result
+                logging.info("signed-release-checker job done: {}".format(project_url))
+                res_payload["scan_results"]["release-checker"]["signed-release-checker"] = signed_release_result
             else:
-                logging.error("release-checker job failed: {}, error: {}".format(project_url, error))
-                res_payload["scan_results"]["release-checker"] = {"error": error}
-
-            # signed_release_result, error = check_signed_release(project_url)
-            # if error == None:
-            #     logging.info("signed-release-checker job done: {}".format(project_url))
-            #     res_payload["scan_results"]["signed-release-checker"] = signed_release_result
-            # else:
-            #     logging.error("signed-release-checker job failed: {}, error: {}".format(project_url, error))
-            #     res_payload["scan_results"]["signed-release-checker"] = {"error": error}
+                logging.error("signed-release-checker job failed: {}, error: {}".format(project_url, error))
+                res_payload["scan_results"]["release-checker"]["signed-release-checker"] = {"error": error}
 
         elif command == 'url-checker':
             from urllib import request
@@ -752,6 +856,15 @@ def callback_func(ch, method, properties, body):
             else:
                 logging.error("api-doc-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["api-doc-checker"] = {"error":error}
+
+        elif command == 'sbom-checker':
+            result = check_sbom_for_project(project_url)
+            if result.get("status") == "success":
+                logging.info("sbom-checker job done: {}".format(project_url))
+                res_payload["scan_results"]["sbom-checker"] = result
+            else:
+                logging.error("sbom-checker job failed: {}, error: {}".format(project_url, result.get("error", "Unknown error")))
+                res_payload["scan_results"]["sbom-checker"] = {"error": result.get("error", "Unknown error")}
 
         elif command == 'languages-detector':
 
