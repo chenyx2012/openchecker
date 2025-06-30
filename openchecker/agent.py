@@ -1,4 +1,3 @@
-import random
 import subprocess
 from message_queue import consumer
 from helper import read_config
@@ -228,11 +227,6 @@ def get_all_releases_with_assets(project_url):
         list: 每个元素为release的dict，包含tag、name、assets等字段。
         str or None: 错误信息，无错为None。
     """
-    import logging
-    import re
-    import os
-    import requests
-    from ghapi.all import GhApi, paged
 
     owner_name = re.match(r"https://(?:github|gitee|gitcode).com/([^/]+)/", project_url).group(1)
     repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
@@ -247,15 +241,26 @@ def get_all_releases_with_assets(project_url):
         except Exception as e:
             logging.error(f"Failed to get releases for repo: {project_url} \n Error: {e}")
             return [], f"failed to get releases for repo: {project_url}"
-    elif "gitee.com" in project_url:
-        url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/releases"
-        response = requests.get(url)
+
+    elif "gitee.com" in project_url or "gitcode.com" in project_url:
+        if "gitee.com" in project_url:
+            url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/releases"
+        else:
+            access_token = config.get("GitCode", {}).get("access_key", "")
+            url = f"https://api.gitcode.com/api/v5/repos/{owner_name}/{repo_name}/releases?access_token={access_token}"
+
+        headers = {
+            'Accept': 'application/json'
+        }
+
+        response = requests.get(url, headers=headers)
         if response.status_code == 200:
             releases = response.json()
             return releases, None
         else:
             logging.error(f"Failed to get releases for repo: {project_url} \n Error: Not found")
             return [], "Not found"
+
     else:
         logging.info(f"Failed to do releases check for repo: {project_url} \n Error: Not supported platform.")
         return [], "Not supported platform."
@@ -303,8 +308,6 @@ def check_release_contents(project_url, type="notes", check_repo=False):
         
         owner_name = owner_match.group(1)
         repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
-        
-        gitee_access_token = config.get("Gitee", {}).get("access_key", "") if "gitee.com" in project_url else ""
 
         all_releases, error = get_all_releases_with_assets(project_url)
         if error:
@@ -323,7 +326,7 @@ def check_release_contents(project_url, type="notes", check_repo=False):
             tag = rel.get("tag_name", "")
             release_name = rel.get("name", tag)
             
-            zip_url = _get_zipball_url(project_url, owner_name, repo_name, tag, gitee_access_token)
+            zip_url = _get_zipball_url(project_url, owner_name, repo_name, tag)
             if not zip_url:
                 results.append(_create_result_entry(tag, release_name, False, [], "No zipball_url"))
                 continue
@@ -358,7 +361,7 @@ def _get_file_patterns(content_type):
         return []
 
 
-def _get_zipball_url(project_url, owner_name, repo_name, tag, gitee_access_token):
+def _get_zipball_url(project_url, owner_name, repo_name, tag):
     """
     获取zipball下载URL。
     
@@ -367,7 +370,6 @@ def _get_zipball_url(project_url, owner_name, repo_name, tag, gitee_access_token
         owner_name (str): 所有者名称
         repo_name (str): 仓库名称
         tag (str): 标签名称
-        gitee_access_token (str): Gitee访问令牌
         
     Returns:
         str: zipball URL，如果获取失败返回None
@@ -376,10 +378,10 @@ def _get_zipball_url(project_url, owner_name, repo_name, tag, gitee_access_token
         return f"https://github.com/{owner_name}/{repo_name}/archive/refs/tags/{tag}.zip"
     
     elif "gitee.com" in project_url:
-        if gitee_access_token:
-            return f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/zipball?access_token={gitee_access_token}&ref={tag}"
-        else:
-            return f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/zipball?ref={tag}"
+        return f"https://gitee.com/{owner_name}/{repo_name}/repository/archive/{tag}.zip"
+    
+    elif "gitcode.com" in project_url:
+        return f"https://raw.gitcode.com/{owner_name}/{repo_name}/archive/refs/heads/{tag}.zip"
     
     else:
         return None
@@ -801,7 +803,7 @@ def callback_func(ch, method, properties, body):
                 if [ ! -e "$project_name" ]; then
                     GIT_ASKPASS=/bin/true git clone --depth=1 {project_url} > /dev/null
                 fi
-                find "$project_name" -type f \( -name "README*" -o -name ".github/README*" -o -name "docs/README*" \) -print
+                find "$project_name" -type f \( -name "README*" -o -name "docs/README*" \) -print
             """
 
             result, error = shell_exec(shell_script)
