@@ -87,7 +87,7 @@ RUN chmod a+x scripts/entrypoint.sh && \
     pip install --upgrade urllib3
 
 # Install criticality
-RUN pip install criticality_score 
+RUN pip install criticality_score  \
     && cp -f openchecker/criticality/run.py  /python3.9/site-packages/criticality_score/run.py
 
 
