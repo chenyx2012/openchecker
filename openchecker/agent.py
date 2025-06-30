@@ -14,7 +14,6 @@ import io
 import logging
 from urllib.parse import urlparse
 from constans import shell_script_handlers
-from sbom.sbom_checker import check_sbom_for_project
 from typing import Any
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
