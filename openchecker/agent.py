@@ -635,7 +635,7 @@ def _execute_commands(command_list: list, project_url: str, res_payload: dict, c
             elif command == 'readme-opensource-checker':
                 _handle_readme_opensource_checker(project_url, res_payload)
             elif command == 'changed-files-since-commit-detector':
-                _handle_changed_files_detector(project_url, res_payload, command_list)
+                _handle_changed_files_detector(project_url, res_payload, commit_hash)
             elif command in command_handlers:
                 _handle_standard_command(command, project_url, res_payload, command_handlers)
             else:
@@ -1277,51 +1277,42 @@ def _handle_build_doc_checker(project_url: str, res_payload: dict) -> None:
     _handle_doc_checker(project_url, res_payload, "build-doc")
 
 
-def _handle_changed_files_detector(project_url: str, res_payload: dict, command_list: list) -> None:
+def _handle_changed_files_detector(project_url: str, res_payload: dict, commit_hash: str) -> None:
     """处理变更文件检测器"""
+    
+    if commit_hash :
+        logging.error("Fail to get commit hash from message body!")
+        res_payload["scan_results"]["changed-files-since-commit-detector"] = {"error": "No commit hash provided"}
+        return
+    
+    context_path = os.getcwd()
     try:
-        # 从消息中获取commit_hash
-        commit_hash = None
-        # 这里需要从外部传入commit_hash，暂时设为None
-        
-        if commit_hash is None:
-            logging.error("Fail to get commit hash from message body!")
-            res_payload["scan_results"]["changed-files-since-commit-detector"] = {"error": "No commit hash provided"}
-            return
-
-        context_path = os.getcwd()
-        try:
-            repository_path = os.path.join(context_path, os.path.splitext(os.path.basename(urlparse(project_url).path))[0])
-            os.chdir(repository_path)
-            logging.info(f"change os path to git repository directory: {repository_path}")
-        except OSError as e:
-            logging.error(f"failed to change os path to git repository directory: {e}")
-            res_payload["scan_results"]["changed-files-since-commit-detector"] = {"error": str(e)}
-            return
-
-        # 获取不同类型的变更文件
-        changed_files = _get_diff_files(commit_hash, "ACDMRTUXB")
-        new_files = _get_diff_files(commit_hash, "A")
-        rename_files = _get_diff_files(commit_hash, "R")
-        deleted_files = _get_diff_files(commit_hash, "D")
-        modified_files = _get_diff_files(commit_hash, "M")
-
-        os.chdir(context_path)
-
-        res_payload["scan_results"]["changed-files-since-commit-detector"] = {
-            "changed_files": changed_files,
-            "new_files": new_files,
-            "rename_files": rename_files,
-            "deleted_files": deleted_files,
-            "modified_files": modified_files
-        }
-        
-        logging.info(f"changed-files-since-commit-detector job done: {project_url}")
-        
-    except Exception as e:
-        logging.error(f"changed-files-since-commit-detector job failed: {project_url}, error: {e}")
+        repository_path = os.path.join(context_path, os.path.splitext(os.path.basename(urlparse(project_url).path))[0])
+        os.chdir(repository_path)
+        logging.info(f"change os path to git repository directory: {repository_path}")
+    except OSError as e:
+        logging.error(f"failed to change os path to git repository directory: {e}")
         res_payload["scan_results"]["changed-files-since-commit-detector"] = {"error": str(e)}
+        return
 
+    # 获取不同类型的变更文件
+    changed_files = _get_diff_files(commit_hash, "ACDMRTUXB")
+    new_files = _get_diff_files(commit_hash, "A")
+    rename_files = _get_diff_files(commit_hash, "R")
+    deleted_files = _get_diff_files(commit_hash, "D")
+    modified_files = _get_diff_files(commit_hash, "M")
+
+    os.chdir(context_path)
+
+    res_payload["scan_results"]["changed-files-since-commit-detector"] = {
+        "changed_files": changed_files,
+        "new_files": new_files,
+        "rename_files": rename_files,
+        "deleted_files": deleted_files,
+        "modified_files": modified_files
+    }
+    
+    logging.info(f"changed-files-since-commit-detector job done: {project_url}")
 
 def _get_diff_files(commit_hash: str, type="ACDMRTUXB"):
     """
