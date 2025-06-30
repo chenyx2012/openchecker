@@ -514,6 +514,7 @@ def callback_func(ch, method, properties, body):
     }
 
     # download source code of the project
+    # TODO: download the related branch of the project directly
     shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
@@ -547,6 +548,7 @@ def callback_func(ch, method, properties, body):
         return
 
     ## Generate the lock files, which would be used by the osv-scanner and ort tools.
+    ## TODO: Generate the lock files only when the project is a npm or ohpm project and osv-scanner/ort is enabled.
     shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ -e "$project_name/package.json" ] && [ ! -e "$project_name/package-lock.json" ]; then
@@ -576,7 +578,7 @@ def callback_func(ch, method, properties, body):
 
     for command in command_list:
         if command == 'osv-scanner':
-
+            # TODO: manage the shell script in a more elegant way, like using a template file.
             shell_script=f"""
                 project_name=$(basename {project_url} | sed 's/\.git$//') > /dev/null
                 if [ ! -e "$project_name" ]; then
@@ -856,15 +858,6 @@ def callback_func(ch, method, properties, body):
             else:
                 logging.error("api-doc-checker job failed: {}, error: {}".format(project_url, error))
                 res_payload["scan_results"]["api-doc-checker"] = {"error":error}
-
-        elif command == 'sbom-checker':
-            result = check_sbom_for_project(project_url)
-            if result.get("status") == "success":
-                logging.info("sbom-checker job done: {}".format(project_url))
-                res_payload["scan_results"]["sbom-checker"] = result
-            else:
-                logging.error("sbom-checker job failed: {}, error: {}".format(project_url, result.get("error", "Unknown error")))
-                res_payload["scan_results"]["sbom-checker"] = {"error": result.get("error", "Unknown error")}
 
         elif command == 'languages-detector':
 
@@ -1268,3 +1261,5 @@ def get_ohpm_info(project_url):
 if __name__ == "__main__":
     consumer(config["RabbitMQ"], "opencheck", callback_func)
     logging.info('Agents server ended.')
+
+# TODO: Add an adapter for various code platforms, like github, gitee, gitcode, etc.
