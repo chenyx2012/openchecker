@@ -529,17 +529,8 @@ def callback_func(ch, method, properties, body):
 
         _generate_lock_files(project_url)
 
-
-        command_handlers = {
-            'criticality-score': run_criticality_score,
-            'scorecard-score': run_scorecard_cli,
-            'code-count': get_code_count,
-            'package-info': get_package_info,
-            'ohpm-info': get_ohpm_info
-        }
-
         # 执行命令
-        _execute_commands(command_list, project_url, res_payload, command_handlers)
+        _execute_commands(command_list, project_url, res_payload, commit_hash)
 
 
         _cleanup_project_source(project_url)
@@ -605,7 +596,7 @@ def _generate_lock_files(project_url: str) -> None:
         logging.error(f"Exception during lock files generation: {e}")
 
 
-def _execute_commands(command_list: list, project_url: str, res_payload: dict, command_handlers: dict) -> None:
+def _execute_commands(command_list: list, project_url: str, res_payload: dict, commit_hash: str) -> None:
     """
     执行命令列表
     
@@ -613,8 +604,17 @@ def _execute_commands(command_list: list, project_url: str, res_payload: dict, c
         command_list: 命令列表
         project_url: 项目URL
         res_payload: 响应载荷
-        command_handlers: 命令处理器映射
+        commit_hash: 提交哈希
     """
+
+    command_handlers = {
+            'criticality-score': run_criticality_score,
+            'scorecard-score': run_scorecard_cli,
+            'code-count': get_code_count,
+            'package-info': get_package_info,
+            'ohpm-info': get_ohpm_info
+        }
+
     for command in command_list:
         try:
             if command == 'binary-checker':
