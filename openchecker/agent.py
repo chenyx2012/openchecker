@@ -18,7 +18,11 @@ from typing import Any
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
 
-config = read_config('config/config.ini')
+
+file_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(file_dir)
+config_file = os.path.join(project_root, "config", "config.ini")
+config = read_config(config_file)
 
 def get_licenses_name(data):
     return next(
@@ -511,10 +515,22 @@ def callback_func(ch, method, properties, body):
         version_number = task_metadata.get("version_number", "None")
         
         logging.info(f"Processing project: {project_url}")
-        
+
         if not project_url:
             logging.error("Project URL is required")
             return
+
+        repos_dir = config.get("OpenCheck", "repos_dir", fallback="/tmp/repos")
+        logging.info(f"Repos directory: {repos_dir}")
+
+        if not os.path.exists(repos_dir):
+            os.makedirs(repos_dir, exist_ok=True)
+            logging.info(f"Created repos directory: {repos_dir}")
+
+        original_cwd = os.getcwd()
+
+        os.chdir(repos_dir)
+        logging.info(f"Changed working directory to: {os.getcwd()}")
 
         res_payload = {
             "command_list": command_list,
@@ -529,12 +545,13 @@ def callback_func(ch, method, properties, body):
 
         _generate_lock_files(project_url)
 
-        # 执行命令
         _execute_commands(command_list, project_url, res_payload, commit_hash)
 
 
         _cleanup_project_source(project_url)
 
+        os.chdir(original_cwd)
+        logging.info(f"Restored working directory to: {os.getcwd()}")
 
         _send_results(callback_url, res_payload)
         
@@ -543,6 +560,13 @@ def callback_func(ch, method, properties, body):
         
     except Exception as e:
         logging.error(f"Error processing message: {e}")
+
+        try:
+            os.chdir(original_cwd)
+            logging.info(f"Restored working directory to: {os.getcwd()} after exception")
+        except:
+            pass
+
         _handle_error_and_nack(ch, method, body, str(e))
 
 
@@ -712,7 +736,11 @@ def _process_command_result(command: str, result) -> Any:
 
 def _handle_binary_checker(project_url: str, res_payload: dict) -> None:
     """处理二进制检查器"""
-    result, error = shell_exec("./scripts/binary_checker.sh", project_url)
+    # file_dir = os.path.dirname(os.path.abspath(__file__))
+    # project_root = os.path.dirname(file_dir)
+    binary_checker_script = os.path.join(project_root, "scripts", "binary_checker.sh")
+
+    result, error = shell_exec(binary_checker_script, project_url)
     if error is None:
         logging.info(f"binary-checker job done: {project_url}")
         # 处理二进制检查器的特殊输出格式
