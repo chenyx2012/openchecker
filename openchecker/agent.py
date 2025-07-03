@@ -1280,8 +1280,8 @@ def _handle_build_doc_checker(project_url: str, res_payload: dict) -> None:
 def _handle_changed_files_detector(project_url: str, res_payload: dict, commit_hash: str) -> None:
     """处理变更文件检测器"""
     
-    if commit_hash :
-        logging.error("Fail to get commit hash from message body!")
+    if not commit_hash:
+        logging.error("Fail to get commit hash!")
         res_payload["scan_results"]["changed-files-since-commit-detector"] = {"error": "No commit hash provided"}
         return
     
