@@ -106,11 +106,15 @@ class GitHubAdapter(PlatformAdapter):
         
     def parse_project_url(self, project_url: str) -> Tuple[str, str]:
         """解析GitHub项目URL"""
-        pattern = r"https://(?:www\.)?github\.com/([^/]+)/([^/]+)\.git"
+        # 支持多种GitHub URL格式：
+        # https://github.com/owner/repo.git
+        # https://github.com/owner/repo
+        # https://www.github.com/owner/repo
+        pattern = r"https://(?:www\.)?github\.com/([^/]+)/([^/]+?)(?:\.git)?$"
         match = re.match(pattern, project_url)
         if match:
             owner_name, repo_name = match.groups()
-            return owner_name, repo_name.replace('.git', '')
+            return owner_name, repo_name
         else:
             raise ValueError(f"Invalid GitHub URL format: {project_url}")
             
@@ -179,11 +183,15 @@ class GiteeAdapter(PlatformAdapter):
         
     def parse_project_url(self, project_url: str) -> Tuple[str, str]:
         """解析Gitee项目URL"""
-        pattern = r"https://(?:www\.)?gitee\.com/([^/]+)/([^/]+)\.git"
+        # 支持多种Gitee URL格式：
+        # https://gitee.com/owner/repo.git
+        # https://gitee.com/owner/repo
+        # https://www.gitee.com/owner/repo
+        pattern = r"https://(?:www\.)?gitee\.com/([^/]+)/([^/]+?)(?:\.git)?$"
         match = re.match(pattern, project_url)
         if match:
             owner_name, repo_name = match.groups()
-            return owner_name, repo_name.replace('.git', '')
+            return owner_name, repo_name
         else:
             raise ValueError(f"Invalid Gitee URL format: {project_url}")
             
@@ -251,11 +259,15 @@ class GitCodeAdapter(PlatformAdapter):
         
     def parse_project_url(self, project_url: str) -> Tuple[str, str]:
         """解析GitCode项目URL"""
-        pattern = r"https://(?:www\.)?gitcode\.com/([^/]+)/([^/]+)\.git"
+        # 支持多种GitCode URL格式：
+        # https://gitcode.com/owner/repo.git
+        # https://gitcode.com/owner/repo
+        # https://www.gitcode.com/owner/repo
+        pattern = r"https://(?:www\.)?gitcode\.com/([^/]+)/([^/]+?)(?:\.git)?$"
         match = re.match(pattern, project_url)
         if match:
             owner_name, repo_name = match.groups()
-            return owner_name, repo_name.replace('.git', '')
+            return owner_name, repo_name
         else:
             raise ValueError(f"Invalid GitCode URL format: {project_url}")
             
