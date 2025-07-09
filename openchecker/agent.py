@@ -252,6 +252,7 @@ def get_all_releases_with_assets(project_url):
             'Accept': 'application/json'
         }
 
+        # TODO: Fetching all releases using pagination
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             releases = response.json()
