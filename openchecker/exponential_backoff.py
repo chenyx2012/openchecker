@@ -3,6 +3,12 @@ import time
 import requests, urllib3
 from helper import read_config
 from openai import OpenAI
+import os
+
+file_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(file_dir)
+config_file = os.path.join(project_root, "config", "config.ini")
+chatbot_config = read_config(config_file, "ChatBot")
 
 # define a retry decorator
 def retry_with_exponential_backoff(
@@ -58,7 +64,7 @@ def post_with_backoff(**kwargs):
 
 @retry_with_exponential_backoff
 def completion_with_backoff(**kwargs):
-    chatbot_config = read_config('config/config.ini', "ChatBot")
+    # chatbot_config = read_config('config/config.ini', "ChatBot")
 
     client = OpenAI(
         api_key = chatbot_config["api_key"],

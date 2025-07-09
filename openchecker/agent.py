@@ -475,7 +475,7 @@ def callback_func(ch, method, properties, body):
             logging.error("Project URL is required")
             return
 
-        repos_dir = config.get("OpenCheck", "repos_dir", fallback="/tmp/repos")
+        repos_dir = config.get("OpenCheck", {}).get("repos_dir", "/tmp/repos")
         logging.info(f"Repos directory: {repos_dir}")
 
         if not os.path.exists(repos_dir):
