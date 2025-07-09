@@ -15,6 +15,7 @@ import logging
 from urllib.parse import urlparse
 from constans import shell_script_handlers
 from typing import Any
+from platform_adapter import platform_manager
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
 
@@ -221,49 +222,12 @@ def check_doc_content(project_url, type):
 
 def get_all_releases_with_assets(project_url):
     """
-    获取所有release及其assets，支持github.com和gitee.com。
+    获取所有release及其assets，支持github.com、gitee.com和gitcode.com。
     返回：
         list: 每个元素为release的dict，包含tag、name、assets等字段。
         str or None: 错误信息，无错为None。
     """
-
-    owner_name = re.match(r"https://(?:github|gitee|gitcode).com/([^/]+)/", project_url).group(1)
-    repo_name = re.sub(r'\.git$', '', os.path.basename(project_url))
-
-    if "github.com" in project_url:
-        api = GhApi(owner=owner_name, repo=repo_name)
-        try:
-            all_releases = []
-            for page in paged(api.repos.list_releases, owner_name, repo_name, per_page=10):
-                all_releases.extend(page)
-            return all_releases, None
-        except Exception as e:
-            logging.error(f"Failed to get releases for repo: {project_url} \n Error: {e}")
-            return [], f"failed to get releases for repo: {project_url}"
-
-    elif "gitee.com" in project_url or "gitcode.com" in project_url:
-        if "gitee.com" in project_url:
-            url = f"https://gitee.com/api/v5/repos/{owner_name}/{repo_name}/releases"
-        else:
-            access_token = config.get("GitCode", {}).get("access_key", "")
-            url = f"https://api.gitcode.com/api/v5/repos/{owner_name}/{repo_name}/releases?access_token={access_token}"
-
-        headers = {
-            'Accept': 'application/json'
-        }
-
-        # TODO: Fetching all releases using pagination
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            releases = response.json()
-            return releases, None
-        else:
-            logging.error(f"Failed to get releases for repo: {project_url} \n Error: Not found")
-            return [], "Not found"
-
-    else:
-        logging.info(f"Failed to do releases check for repo: {project_url} \n Error: Not supported platform.")
-        return [], "Not supported platform."
+    return platform_manager.get_releases(project_url)
 
 def check_release_contents(project_url, type="notes", check_repo=False):
     """
@@ -374,17 +338,7 @@ def _get_zipball_url(project_url, owner_name, repo_name, tag):
     Returns:
         str: zipball URL，如果获取失败返回None
     """
-    if "github.com" in project_url:
-        return f"https://github.com/{owner_name}/{repo_name}/archive/refs/tags/{tag}.zip"
-    
-    elif "gitee.com" in project_url:
-        return f"https://gitee.com/{owner_name}/{repo_name}/repository/archive/{tag}.zip"
-    
-    elif "gitcode.com" in project_url:
-        return f"https://raw.gitcode.com/{owner_name}/{repo_name}/archive/refs/heads/{tag}.zip"
-    
-    else:
-        return None
+    return platform_manager.get_zipball_url(project_url, tag)
 
 
 def _check_zip_contents(zip_url, file_patterns):
@@ -802,11 +756,14 @@ def _handle_url_checker(project_url: str, res_payload: dict) -> None:
 def _handle_sonar_scanner(project_url: str, res_payload: dict) -> None:
     """处理SonarQube扫描器"""
     try:
-        pattern = r'https?://(?:www\.)?(github\.com|gitee\.com|gitcode\.com)/([^/]+)/([^/]+)\.git'
-        match = re.match(pattern, project_url)
-        if match:
-            platform, organization, project = match.groups()
-        else:
+        # 使用平台适配器解析项目URL
+        try:
+            owner_name, repo_name = platform_manager.parse_project_url(project_url)
+            adapter = platform_manager.get_adapter(project_url)
+            platform = adapter.get_platform_name() if adapter else "other"
+            organization = owner_name
+            project = repo_name
+        except ValueError:
             platform, organization, project = "other", "default", "default"
         
         sonar_project_name = f"{platform}_{organization}_{project}"
@@ -1133,86 +1090,30 @@ def get_package_info(project_url):
             logging.error("Failed to get down_count for package: {} \n Error: Not found".format(package_name))
             return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
     else:
-        # 调用api
-        domain_name = urlList[2]
-        owner_name = urlList[3]
-        repo_name = urlList[len(urlList) - 1]  
-        description = ''
-        home_url = ''
-        down_count = ''
-        day_enter = '' 
-        if  'gitee' in domain_name.lower():
-            authorToken = config["Gitee"]["access_key"]
-            url = 'https://gitee.com/api/v5/repos/'+owner_name+'/'+repo_name+'?access_token='+authorToken.strip()
-            response = requests.get(url)
-            if response.status_code == 200:
-                repo_json = json.loads(response.text)
-                home_url = repo_json['homepage']
-                description =  repo_json['description']      
-            elif response.status_code == 403:
-                logging.error("Failed to get description and home_url for repo: {} \n Error: Gitee token limit")
-                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
-            else:
-                logging.error("Failed to get description and home_url for repo: {} \n Error: {}".format(project_url, "Not found"))
-                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
-        elif 'github' in domain_name.lower():
-            authorToken = config["Github"]["access_key"]
-            url = 'https://api.github.com/repos/'+owner_name+'/'+repo_name
-            response = requests.get(
-                url,
-                headers = {
-                    'Accept' : 'application/vnd.github+json',
-                    'Authorization':'Bearer ' + authorToken
-                }
-            )         
-            if response.status_code == 200:
-                repo_json = json.loads(response.text)
-                home_url = repo_json['homepage']
-                description =  repo_json['description']
-            elif response.status_code == 403:
-                logging.error("Failed to get description and home_url for repo: {} \n Error: Github token limit")
-                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
-            else:
-                logging.error("Failed to get description and home_url for repo: {} \n Error: {}".format(project_url, "Not found"))
-                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
-        elif 'gitcode' in domain_name.lower():
-            authorToken = config["Gitcode"]["access_key"]
-            url = 'https://api.gitcode.com/api/v5/repos/'+owner_name+'/'+repo_name+'/download_statistics?access_token='+authorToken.strip()
-            response = requests.get(url)         
-            if response.status_code == 200:
-                down_json = json.loads(response.text)
-                down_list = down_json['download_statistics_detail']
-                down_count = 0
-                for ch in down_list:
-                    down_count += ch['today_dl_cnt']
-                day_enter = down_list[len(down_list) - 1]['pdate'] + " - " + down_list[0]['pdate'] 
-            elif response.status_code == 403:
-                logging.error("Failed to get down_count for repo: {} \n Error: Gitcode token limit")
-                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
-            else:
-                logging.error("Failed to get down_count for repo: {} \n Error: {}".format(project_url, "Not found"))
-                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
-             
-            ##描述
-            repo_url = 'https://api.gitcode.com/api/v5/repos/'+owner_name+'/'+repo_name+'?access_token='+authorToken.strip()
-            repo_response = requests.get(repo_url)         
-            if repo_response.status_code == 200:
-                repo_json = json.loads(repo_response.text)
-                description =  repo_json['description'] 
-            elif repo_response.status_code == 403:
-                logging.error("Failed to get description for repo: {} \n Error: Gitcode token limit")
-                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
-            else:
-                logging.error("Failed to get description for repo: {} \n Error: {}".format(project_url, "Not found"))
-                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
+        # 使用平台适配器获取仓库信息
+        try:
+            repo_info, repo_error = platform_manager.get_repo_info(project_url)
+            download_stats, download_error = platform_manager.get_download_stats(project_url)
             
-        return {
-            "description": description, 
-            "home_url": home_url, 
-            "dependent_count": False, 
-            "down_count": down_count, 
-            "day_enter": day_enter
+            if repo_error:
+                logging.error(f"Failed to get repo info for {project_url}: {repo_error}")
+                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, repo_error
+                
+            description = repo_info.get("description", "")
+            home_url = repo_info.get("homepage", "")
+            down_count = download_stats.get("download_count", 0)
+            day_enter = download_stats.get("period", "")
+            
+            return {
+                "description": description, 
+                "home_url": home_url, 
+                "dependent_count": False, 
+                "down_count": down_count, 
+                "day_enter": day_enter
             }, None
+        except Exception as e:
+            logging.error(f"Failed to get package info for {project_url}: {e}")
+            return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, str(e)
 
 def get_ohpm_info(project_url):
     try:
