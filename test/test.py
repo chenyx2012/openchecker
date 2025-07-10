@@ -1,5 +1,33 @@
 import requests
 
+"""
+API测试脚本
+功能：测试OpenChecker API的认证和基本功能
+
+使用说明：
+1. 通过认证接口获取访问令牌
+2. 使用令牌访问受保护的API端点
+"""
+
+# ==================== API调用示例（curl命令） ====================
+# 1. 获取访问令牌
+# curl -X POST http://localhost:8083/auth \
+#   -H "Content-Type: application/json" \
+#   -d '{"username": "temporary_user", "password": "default_password"}'
+
+# 2. 使用令牌访问受保护的路由
+# curl -X POST http://localhost:8083/opencheck \
+#   -H "Content-Type: application/json" \
+#   -H "Authorization: JWT <access_token>" \
+#   -d '{
+#     "commands": ["osv-scanner", "scancode"],
+#     "project_url": "https://github.com/example/project",
+#     "callback_url": "https://example.com/callback",
+#     "task_metadata": {"priority": "high"}
+#   }'
+
+# ==================== Python实现 ====================
+
 baseURL = 'http://localhost:8080/'
 
 headers = {
