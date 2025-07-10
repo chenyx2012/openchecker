@@ -2,17 +2,20 @@ from flask import Flask, request
 from flask_restful import Resource, Api
 from flask_jwt import JWT, jwt_required, current_identity
 from user_manager import authenticate, identity
-from token_operator import secret_key
 from datetime import timedelta
 import os
 from message_queue import test_rabbitmq_connection, create_queue, publish_message
 from helper import read_config
 import json
 
+jwt_config = read_config('config/config.ini', "JWT")
+secret_key = jwt_config.get("secret_key", "your_secret_key")
+expires_minutes = int(jwt_config.get("expires_minutes", 30))
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = secret_key
 # app.config['JWT_AUTH_URL_RULE'] = '/auth'
-app.config['JWT_EXPIRATION_DELTA'] = timedelta(days=30)
+app.config['JWT_EXPIRATION_DELTA'] = timedelta(minutes=expires_minutes)
 
 api = Api(app)
 
