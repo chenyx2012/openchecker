@@ -1224,30 +1224,6 @@ def _handle_readme_opensource_checker(project_url: str, res_payload: dict) -> No
         logging.error(f"readme-opensource-checker job failed: {project_url}, error: {e}")
         res_payload["scan_results"]["readme-opensource-checker"] = {"error": str(e)}
 
-
-def _bestpractices_checker(project_url: str, res_payload: dict) -> None:
-    """
-    获取项目的OpenSSF Best Pactices
-    """
-    logging.info(f"bestpractices-checker processing projec: {project_url}")
-    api_url = f"https://www.bestpractices.dev/projects.json?url={project_url}"
-    try:
-        response = requests.get(api_url, timeout=10)
-        response.raise_for_status()
-        
-        data = response.json()
-        logging.info(f"bestpractices-checker processing completed projec: {project_url}")
-        if data and len(data) > 0:
-            res_payload["scan_results"]["bestpractices-checker"] = data[0]
-        else:
-            res_payload["scan_results"]["bestpractices-checker"] = {}
-            
-    except requests.exceptions.RequestException as e:
-        logging.info(f"bestpractices-checker request api fail projec: {project_url}, error: {e}")
-        res_payload["scan_results"]["bestpractices-checker"] = {}
-    except json.JSONDecodeError as e:
-        logging.info(f"bestpractices-checker parse json fail projec: {project_url}, error: {e}")
-        res_payload["scan_results"]["bestpractices-checker"] = {}
         
 
 def _handle_build_doc_checker(project_url: str, res_payload: dict) -> None:
