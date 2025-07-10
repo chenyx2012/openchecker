@@ -104,11 +104,9 @@ def request_url (url, payload):
     response = post_with_backoff(url=url, json=payload)
 
     if response.status_code == 200:
-        logging.info("Request sent successfully.")
-        return response.text
+        return response.text, None
     else:
-        logging.error(f"Failed to send request. Status code: {response.status_code}")
-        return None
+        return None, f"Failed to send request. Status code: {response.status_code}"
 
 def check_readme_opensource(project_url):
     project_name = os.path.basename(project_url).replace('.git', '')
@@ -512,6 +510,8 @@ def callback_func(ch, method, properties, body):
         
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
+
+        logging.info(f"Project {project_url} processed successfully at {datetime.now()}")
         
     except Exception as e:
         logging.error(f"Error processing message: {e}")
@@ -972,11 +972,11 @@ def _send_results(callback_url: str, res_payload: dict) -> None:
     """发送结果"""
     if callback_url:
         try:
-            response = request_url(callback_url, res_payload)
-            if response:
+            response, err = request_url(callback_url, res_payload)
+            if err is None:
                 logging.info("Results sent successfully")
             else:
-                logging.error("Failed to send results")
+                logging.error(f"Failed to send results: {err}")
         except Exception as e:
             logging.error(f"Exception sending results: {e}")
 
