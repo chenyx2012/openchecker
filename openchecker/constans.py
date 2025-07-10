@@ -66,8 +66,8 @@ sonar_scanner_shell_script = f"""
     sonar-scanner \\
         -Dsonar.projectKey={{sonar_project_name}} \\
         -Dsonar.sources=$project_name \\
-        -Dsonar.host.url=http://{{sonar_config['host']}}:{{sonar_config['port']}} \\
-        -Dsonar.token={{sonar_config['token']}} \\
+        -Dsonar.host.url=http://{{sonar_host}}:{{sonar_port}} \\
+        -Dsonar.token={{sonar_token}} \\
         -Dsonar.exclusions=**/*.java
     rm -rf $project_name > /dev/null
     """

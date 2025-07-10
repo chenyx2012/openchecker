@@ -775,7 +775,9 @@ def _handle_sonar_scanner(project_url: str, res_payload: dict) -> None:
         shell_script = shell_script_handlers["sonar-scanner"].format(
             project_url=project_url, 
             sonar_project_name=sonar_project_name, 
-            sonar_config=sonar_config
+            sonar_host=sonar_config.get('host', 'localhost'),
+            sonar_port=sonar_config.get('port', '9000'),
+            sonar_token=sonar_config.get('token', '')
         )
         result, error = shell_exec(shell_script)
         
