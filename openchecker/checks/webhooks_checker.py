@@ -1,16 +1,10 @@
-import logging
 import re
-import yaml
 import requests
-import json
 import os
-from ghapi.all import GhApi, paged
-from pathlib import Path
 from typing import Any, List, Dict
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
 
-command = 'webhooks-checker'
+COMMAND = 'webhooks-checker'
 
 
 def get_webhooks(project_url, access_token):
@@ -31,41 +25,42 @@ def get_webhooks(project_url, access_token):
             pass
         else:
             url = f"https://api.gitcode.com/api/v5/repos/{owner_name}/{repo_name}/hooks?access_token={access_token}&page=1&per_page=100"
-
-        headers = {
-            'Accept': 'application/json'
-        }
-
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            hooks = response.json()
-            return hooks, None
-        else:
-            logging.error(f"Failed to get hooks for repo: {project_url} \n Error: Not found")
-            return [], "Not found"
+        try:
+            headers = {
+                'Accept': 'application/json'
+            }
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                hooks = response.json()
+                return hooks, None
+            else:
+                return [], "token invalid"
+        except Exception as e:
+            return [], "token invalid"
 
     else:
-        logging.info(f"Failed to do hooks check for repo: {project_url} \n Error: Not supported platform.")
         return [], "Not supported platform."
 
 
 def webhooks_checker(project_url: str, res_payload: dict, access_token: str) -> None:
     """
-    检查项目webhooks
+    检查项目webhooks,
+    指标详情介绍 https://github.com/ossf/scorecard/blob/main/docs/checks.md#webhooks
     """
-    logging.info(f"{command} processing projec: {project_url}")
     
     webhooks_hooks = []
+    error_msg = None
+    
     if access_token:
-        hooks, msg = get_webhooks(project_url, access_token)
-        if msg is None:
+        hooks, error_msg = get_webhooks(project_url, access_token)
+        if error_msg is None:
             webhooks_hooks = [
                 {**hook, "password": "******"} 
                 if hook.get("password") else hook for hook in hooks
             ]
     
-    res_payload["scan_results"][command] = {
+    res_payload["scan_results"][COMMAND] = {
         "access_token": True if access_token else False,
+        "error_msg": error_msg,
         "webhooks_hooks": webhooks_hooks
     }
-    logging.info(f"{command} processing completed projec: {project_url}")

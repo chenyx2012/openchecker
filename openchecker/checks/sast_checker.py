@@ -1,18 +1,11 @@
-import logging
-import os
-import glob
 import re
 import yaml
-import json
 from typing import List, Dict, Tuple, Any
 from pathlib import Path
 from common import get_platform_type, list_workflow_files
+from platform_adapter import platform_manager
 
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
-
-
-command = 'sast-checker'
+COMMAND = 'sast-checker'
 
 # SAST工具正则表达式映射
 SAST_TOOL_PATTERNS = {
@@ -117,17 +110,17 @@ def detect_sonar_config(project_dir: str) -> List[Dict]:
 
 
 def sast_checker(project_url: str, res_payload: dict) -> None:
-    """ SAST 工具检查 """
-    logging.info(f"{command} processing projec: {project_url}")
-    
-    repo_path = project_url.split("/")[-1]
+    """ 
+    SAST 工具检查 
+    指标详情介绍 https://github.com/ossf/scorecard/blob/main/docs/checks.md#sast
+    """
+    owner_name, repo_path = platform_manager.parse_project_url(project_url)
     platform_type = get_platform_type(project_url)
     
     workflows = detect_workflows(repo_path, platform_type)
     sonar_configs = detect_sonar_config(repo_path)  
     
-    res_payload["scan_results"][command] = {
+    res_payload["scan_results"][COMMAND] = {
         "sast_workflows": workflows,
         "sonar_configs": sonar_configs
     }
-    logging.info(f"{command} processing completed projec: {project_url}")

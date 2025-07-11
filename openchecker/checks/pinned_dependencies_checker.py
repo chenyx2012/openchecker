@@ -1,18 +1,13 @@
-import logging
-import os
-import glob
 import re
 import yaml
 import json
 from typing import List, Dict, Tuple, Any
 from pathlib import Path
 from common import get_platform_type, list_workflow_files
+from platform_adapter import platform_manager
 
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
-
-
-command = 'pinned-dependencies-checker'
+COMMAND = 'pinned-dependencies-checker'
 
 
 # 依赖类型常量
@@ -477,17 +472,18 @@ def analyze_pinning(dependencies: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def pinned_dependencies_checker(project_url: str, res_payload: dict) -> None:
-    """检查项目依赖是否固定到特定版本/哈希值"""
-    logging.info(f"{command} processing projec: {project_url}")
+    """
+    检查项目依赖是否固定到特定版本/哈希值
+    指标详情介绍 https://github.com/ossf/scorecard/blob/main/docs/checks.md#pinned_dependencies
+    """
     
-    repo_path = project_url.split("/")[-1]
+    owner_name, repo_path = platform_manager.parse_project_url(project_url)
     platform_type = get_platform_type(project_url)
     
     dependencies = collect_dependencies(repo_path, platform_type)
     analysis_results = analyze_pinning(dependencies)
     
-    res_payload["scan_results"][command] = {
+    res_payload["scan_results"][COMMAND] = {
         "analysis_results": analysis_results,
         "dependencies": dependencies
     }
-    logging.info(f"{command} processing completed projec: {project_url}")

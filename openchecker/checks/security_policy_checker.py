@@ -1,18 +1,12 @@
-import logging
 import os
 import glob
 import re
-import yaml
-import json
 from typing import List, Dict, Tuple, Any
-from pathlib import Path
 from common import get_platform_type, list_workflow_files
+from platform_adapter import platform_manager
 
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
-
-
-command = 'security-policy-checker'
+COMMAND = 'security-policy-checker'
 
 
 def find_security_policy_files(repo_path: str, platform_type: str) -> List[str]:
@@ -91,15 +85,16 @@ def analyze_security_policy_content(file_path: str) -> Dict:
 
 
 def security_policy_checker(project_url: str, res_payload: dict) -> None:
-    """ Security-Policy 指标检测 """
-    logging.info(f"{command} processing projec: {project_url}")
+    """ 
+    Security-Policy 指标检测 
+    指标详情介绍 https://github.com/ossf/scorecard/blob/main/docs/checks.md#security_policy
+    """
     
-    repo_path = project_url.split("/")[-1]
+    owner_name, repo_path = platform_manager.parse_project_url(project_url)
     platform_type = get_platform_type(project_url)
     policy_files = find_security_policy_files(repo_path, platform_type)
     content_analysis = {}
     if policy_files:
         content_analysis = analyze_security_policy_content(policy_files[0])
     
-    res_payload["scan_results"][command] = content_analysis
-    logging.info(f"{command} processing completed projec: {project_url}")
+    res_payload["scan_results"][COMMAND] = content_analysis

@@ -1,14 +1,12 @@
-import logging
 import re
 import yaml
 from pathlib import Path
 from typing import Any, List, Dict
 from common import get_platform_type, list_workflow_files
+from platform_adapter import platform_manager
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
 
-
-command = 'dangerous-workflow-checker'
+COMMAND = 'dangerous-workflow-checker'
 
 
 def has_dangerous_trigger(workflow: Dict[str, Any]) -> bool:
@@ -24,8 +22,8 @@ def has_dangerous_trigger(workflow: Dict[str, Any]) -> bool:
         return any(trigger in dangerous_triggers for trigger in on_events)
     elif isinstance(on_events, dict):
         return any(trigger in dangerous_triggers for trigger in on_events.keys())
-    
-    return False
+    else:
+        return False
 
 
 def is_untrusted_ref(ref: str, platform_type: str) -> bool:
@@ -184,7 +182,6 @@ def check_workflow_file(workflow_file: Path, repo_path: str, platform_type: str)
         # 2. 检查脚本注入
         dangerous_patterns.extend(check_script_injection(workflow, relative_path, platform_type))
     except Exception:
-        # 忽略解析错误的文件
         pass
     return workflow_file_item
     
@@ -194,18 +191,15 @@ def check_workflow_file(workflow_file: Path, repo_path: str, platform_type: str)
 
 def dangerous_workflow_checker(project_url: str, res_payload: dict) -> None:
     """
-    检查仓库中的危险工作流
+    检查仓库中的危险工作流,
+    指标详情介绍 https://github.com/ossf/scorecard/blob/main/docs/checks.md#dangerous-workflow
     """
-
-    logging.info(f"{command} processing projec: {project_url}")
-    repo_name = project_url.split("/")[-1]
-    repo_path = f"{repo_name}"
+    owner_name, repo_path = platform_manager.parse_project_url(project_url)
     platform_type = get_platform_type(project_url)
     workflow_files = list_workflow_files(repo_path, platform_type)
     workflows_file_detail = []
     for workflow_file in workflow_files:
         workflows_file_detail.append(check_workflow_file(Path(workflow_file), repo_path, platform_type))
         
-    res_payload["scan_results"][command] = workflows_file_detail
-    logging.info(f"{command} processing completed projec: {project_url}")
+    res_payload["scan_results"][COMMAND] = workflows_file_detail
     

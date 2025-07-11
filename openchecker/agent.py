@@ -578,7 +578,7 @@ def _generate_lock_files(project_url: str) -> None:
         logging.error(f"Exception during lock files generation: {e}")
 
 
-def _execute_commands(command_list: list, project_url: str, res_payload: dict, command_handlers: dict, commit_hash: str, access_token: str) -> None:
+def _execute_commands(command_list: list, project_url: str, res_payload: dict, commit_hash: str, access_token: str) -> None:
     """
     执行命令列表
     
@@ -596,54 +596,51 @@ def _execute_commands(command_list: list, project_url: str, res_payload: dict, c
             'package-info': get_package_info,
             'ohpm-info': get_ohpm_info
         }
-
+    
+    command_switch = {
+        'binary-checker': lambda: _handle_binary_checker(project_url, res_payload),
+        'release-checker': lambda: _handle_release_checker(project_url, res_payload),
+        'url-checker': lambda: _handle_url_checker(project_url, res_payload),
+        'sonar-scanner': lambda: _handle_sonar_scanner(project_url, res_payload),
+        'osv-scanner': lambda: _handle_shell_script_command('osv-scanner', project_url, res_payload),
+        'scancode': lambda: _handle_shell_script_command('scancode', project_url, res_payload),
+        'dependency-checker': lambda: _handle_shell_script_command('dependency-checker', project_url, res_payload),
+        'readme-checker': lambda: _handle_shell_script_command('readme-checker', project_url, res_payload),
+        'maintainers-checker': lambda: _handle_shell_script_command('maintainers-checker', project_url, res_payload),
+        'languages-detector': lambda: _handle_shell_script_command('languages-detector', project_url, res_payload),
+        'oat-scanner': lambda: _handle_shell_script_command('oat-scanner', project_url, res_payload),
+        'license-detector': lambda: _handle_shell_script_command('license-detector', project_url, res_payload),
+        'api-doc-checker': lambda: _handle_general_doc_checker(project_url, res_payload, "api-doc"),
+        'build-doc-checker': lambda: _handle_general_doc_checker(project_url, res_payload, "build-doc"),
+        'readme-opensource-checker': lambda: _handle_readme_opensource_checker(project_url, res_payload),
+        'bestpractices-checker': lambda: bestpractices_checker(project_url, res_payload),
+        'dangerous-workflow-checker': lambda: dangerous_workflow_checker(project_url, res_payload),
+        'fuzzing-checker': lambda: fuzzing_checker(project_url, res_payload),
+        'packaging-checker': lambda: packaging_checker(project_url, res_payload),
+        'pinned-dependencies-checker': lambda: pinned_dependencies_checker(project_url, res_payload),
+        'sast-checker': lambda: sast_checker(project_url, res_payload),
+        'security-policy-checker': lambda: security_policy_checker(project_url, res_payload),
+        'token-permissions-checker': lambda: token_permissions_checker(project_url, res_payload),
+        'webhooks-checker': lambda: webhooks_checker(project_url, res_payload, access_token),
+        'changed-files-since-commit-detector': lambda: _handle_changed_files_detector(project_url, res_payload, commit_hash),
+        'criticality-score': lambda: _handle_standard_command('criticality-score', project_url, res_payload, command_handlers),
+        'scorecard-score': lambda: _handle_standard_command('scorecard-score', project_url, res_payload, command_handlers),
+        'code-count': lambda: _handle_standard_command('code-count', project_url, res_payload, command_handlers),
+        'package-info': lambda: _handle_standard_command('package-info', project_url, res_payload, command_handlers),
+        'ohpm-info': lambda: _handle_standard_command('ohpm-info', project_url, res_payload, command_handlers),
+    }
+    
     for command in command_list:
-        try:
-            if command == 'binary-checker':
-                _handle_binary_checker(project_url, res_payload)
-            elif command == 'release-checker':
-                _handle_release_checker(project_url, res_payload)
-            elif command == 'url-checker':
-                _handle_url_checker(project_url, res_payload)
-            elif command == 'sonar-scanner':
-                _handle_sonar_scanner(project_url, res_payload)
-            elif command in ['osv-scanner', 'scancode', 'dependency-checker', 'readme-checker', 
-                           'maintainers-checker', 'languages-detector', 'oat-scanner', 'license-detector']:
-                _handle_shell_script_command(command, project_url, res_payload)
-            elif command == 'api-doc-checker':
-                _handle_general_doc_checker(project_url, res_payload, "api-doc")
-            elif command == 'build-doc-checker':
-                _handle_general_doc_checker(project_url, res_payload, "build-doc")
-            elif command == 'readme-opensource-checker':
-                _handle_readme_opensource_checker(project_url, res_payload)
-            elif command == 'bestpractices-checker':
-                bestpractices_checker(project_url, res_payload)
-            elif command == 'dangerous-workflow-checker':
-                dangerous_workflow_checker(project_url, res_payload)
-            elif command == 'fuzzing-checker':
-                fuzzing_checker(project_url, res_payload)
-            elif command == 'packaging-checker':
-                packaging_checker(project_url, res_payload)
-            elif command == 'pinned-dependencies-checker':
-                pinned_dependencies_checker(project_url, res_payload)
-            elif command == 'sast-checker':
-                sast_checker(project_url, res_payload)
-            elif command == 'security-policy-checker':
-                security_policy_checker(project_url, res_payload)
-            elif command == 'token-permissions-checker':
-                token_permissions_checker(project_url, res_payload)
-            elif command == 'webhooks-checker':
-                webhooks_checker(project_url, res_payload, access_token)
-            elif command == 'changed-files-since-commit-detector':
-                _handle_changed_files_detector(project_url, res_payload, commit_hash)
-            elif command in command_handlers:
-                _handle_standard_command(command, project_url, res_payload, command_handlers)
-            else:
-                logging.warning(f"Unknown command: {command}")
-                
-        except Exception as e:
-            logging.error(f"Error executing command {command}: {e}")
-            res_payload["scan_results"][command] = {"error": str(e)}
+        if command in command_switch:
+            try:
+                logging.info(f"{command} job done: {project_url}")
+                command_switch[command]()
+            except Exception as e:
+                logging.error(f"Error executing command {command}: {e}")
+                res_payload["scan_results"][command] = {"error": str(e)}
+        else:
+            logging.warning(f"Unknown command: {command}")
+        
 
 
 def _handle_shell_script_command(command: str, project_url: str, res_payload: dict) -> None:

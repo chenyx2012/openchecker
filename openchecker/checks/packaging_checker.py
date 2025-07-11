@@ -1,17 +1,10 @@
-import logging
-import os
-import glob
 import re
 from typing import List, Dict, Tuple, Any
 from pathlib import Path
 from common import get_platform_type, list_workflow_files
+from platform_adapter import platform_manager
 
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
-
-
-command = 'packaging-checker'
-
+COMMAND = 'packaging-checker'
 
 def _match_pattern_group(content: str, lines: List[str], pattern_group: Dict[str, str]) -> bool:
     """
@@ -175,16 +168,17 @@ def is_packaging_workflow(file_path: str) -> Dict[str, Any]:
 
 
 def packaging_checker(project_url: str, res_payload: dict) -> None:
-    """执行打包检查"""
-    logging.info(f"{command} processing projec: {project_url}")
+    """
+    执行打包检查
+    指标详情介绍 https://github.com/ossf/scorecard/blob/main/docs/checks.md#packaging
+    """
     
     packaging_workflow_data = []
-    repo_path = project_url.split("/")[-1]
+    owner_name, repo_path = platform_manager.parse_project_url(project_url)
     platform_type = get_platform_type(project_url)
     workflow_files = list_workflow_files(repo_path, platform_type)
     for file_path in workflow_files:
         packaging_workflow = is_packaging_workflow(file_path)   
         packaging_workflow_data.append(packaging_workflow) 
     
-    res_payload["scan_results"][command] = packaging_workflow_data
-    logging.info(f"{command} processing completed projec: {project_url}")
+    res_payload["scan_results"][COMMAND] = packaging_workflow_data

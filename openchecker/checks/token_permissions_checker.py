@@ -1,4 +1,3 @@
-import logging
 import os
 import glob
 import re
@@ -7,12 +6,10 @@ import json
 from typing import List, Dict, Tuple, Any
 from pathlib import Path
 from common import get_platform_type, list_workflow_files
+from platform_adapter import platform_manager
 
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
-
-
-command = 'token-permissions-checker'
+COMMAND = 'token-permissions-checker'
 
 
 # 权限级别常量
@@ -190,10 +187,12 @@ def _extract_workflow_permissions(workflow_file: str, repo_path: str) -> List[Di
 
 
 def token_permissions_checker(project_url: str, res_payload: dict) -> None:
-    """ 检查workflows的token权限信息 """
-    logging.info(f"{command} processing projec: {project_url}")
+    """ 
+    检查workflows的token权限信息 ,
+    指标详情介绍 https://github.com/ossf/scorecard/blob/main/docs/checks.md#token_permissions
+    """
     
-    repo_path = project_url.split("/")[-1]
+    owner_name, repo_path = platform_manager.parse_project_url(project_url)
     platform_type = get_platform_type(project_url)
     results = {
         "num_workflows": 0,
@@ -207,5 +206,4 @@ def token_permissions_checker(project_url: str, res_payload: dict) -> None:
             results["num_workflows"] += 1
             results["token_permissions"].extend(permissions)
     
-    res_payload["scan_results"][command] = results
-    logging.info(f"{command} processing completed projec: {project_url}")
+    res_payload["scan_results"][COMMAND] = results

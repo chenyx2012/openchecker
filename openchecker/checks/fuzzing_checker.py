@@ -1,16 +1,12 @@
-import logging
 import os
 import glob
 import re
 from typing import List, Dict, Tuple
 from constans import shell_script_handlers
 from common import shell_exec
+from platform_adapter import platform_manager
 
-
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
-
-
-command = 'fuzzing-checker'
+COMMAND = 'fuzzing-checker'
 
 
 # 模糊测试工具常量
@@ -107,32 +103,6 @@ def get_language_configs() -> Dict[str, Dict]:
         )
     }
 
-
-def fuzzing_checker(project_url: str, res_payload: dict) -> None:
-    """执行模糊测试检查"""
-    logging.info(f"{command} processing projec: {project_url}")
-    
-    all_results = []
-    repo_path = project_url.split("/")[-1]
-    
-    # 检测 ClusterFuzzLite
-    cfl_result = check_clusterfuzz_lite(repo_path)
-    all_results.append(cfl_result)
-    
-    # 检测语言特定的模糊测试
-    shell_script = shell_script_handlers["languages-detector"].format(project_url=project_url)
-    result, error = shell_exec(shell_script)
-    if error is None:
-        languages = result
-    else:
-        languages = []
-    languages = [lang.lower() for lang in languages]
-    lang_results = check_language_fuzzing(repo_path, languages)
-    all_results.extend(lang_results)
-    
-    res_payload["scan_results"][command] = all_results
-    logging.info(f"{command} processing completed projec: {project_url}")
-    
     
     
 def check_clusterfuzz_lite(repo_path: str) -> Dict:
@@ -152,7 +122,7 @@ def check_clusterfuzz_lite(repo_path: str) -> Dict:
                         'continuous fuzzing solution that runs as part of Continuous Integration (CI) workflows'
                     )
         except Exception as e:
-            logging.info(f"fuzzing-checker projec: {repo_path}, read ClusterFuzzLite Dockerfile error: {e}")
+            pass
     
     return create_fuzzing_result(FUZZING_TOOLS['CLUSTERFUZZ_LITE'], False)
     
@@ -213,3 +183,31 @@ def check_file_content(file_path: str, func_pattern: str) -> bool:
             return bool(re.search(func_pattern, content))
     except Exception as e:
         return False
+    
+    
+
+def fuzzing_checker(project_url: str, res_payload: dict) -> None:
+    """
+    执行模糊测试检查
+    指标详情介绍 https://github.com/ossf/scorecard/blob/main/docs/checks.md#fuzzing
+    """
+    
+    all_results = []
+    owner_name, repo_path = platform_manager.parse_project_url(project_url)
+    
+    # 检测 ClusterFuzzLite
+    cfl_result = check_clusterfuzz_lite(repo_path)
+    all_results.append(cfl_result)
+    
+    # 检测语言特定的模糊测试
+    shell_script = shell_script_handlers["languages-detector"].format(project_url=project_url)
+    result, error = shell_exec(shell_script)
+    if error is None:
+        languages = result
+    else:
+        languages = []
+    languages = [lang.lower() for lang in languages]
+    lang_results = check_language_fuzzing(repo_path, languages)
+    all_results.extend(lang_results)
+    
+    res_payload["scan_results"][COMMAND] = all_results
