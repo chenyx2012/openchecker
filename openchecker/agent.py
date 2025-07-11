@@ -12,10 +12,22 @@ from ghapi.all import GhApi, paged
 import zipfile
 import io
 import logging
+import yaml
 from urllib.parse import urlparse
 from constans import shell_script_handlers
-from typing import Any
+from typing import Any, List, Dict
+from pathlib import Path
 from platform_adapter import platform_manager
+from common import shell_exec
+from checks.fuzzing_checker import fuzzing_checker
+from checks.dangerous_workflow_checker import dangerous_workflow_checker
+from checks.bestpractices_checker import bestpractices_checker
+from checks.packaging_checker import packaging_checker
+from checks.pinned_dependencies_checker import pinned_dependencies_checker
+from checks.sast_checker import sast_checker
+from checks.security_policy_checker import security_policy_checker
+from checks.token_permissions_checker import token_permissions_checker
+from checks.webhooks_checker import webhooks_checker
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s : %(message)s')
 
@@ -88,17 +100,6 @@ def dependency_checker_output_process(output):
 
     return result
 
-def shell_exec(shell_script, param=None):
-    if param != None:
-        process = subprocess.Popen(["/bin/bash", "-c", shell_script + " " + param], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-    else:
-        process = subprocess.Popen([shell_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-    shell_output, error = process.communicate()
-
-    if process.returncode == 0:
-        return shell_output, None
-    else:
-        return None, error
 
 def request_url (url, payload):
     response = post_with_backoff(url=url, json=payload)
@@ -463,10 +464,12 @@ def callback_func(ch, method, properties, body):
         command_list = message.get('command_list', [])
         project_url = message.get('project_url')
         commit_hash = message.get("commit_hash")
+        access_token = message.get("access_token")
         callback_url = message.get('callback_url')
         task_metadata = message.get('task_metadata', {})
         version_number = task_metadata.get("version_number", "None")
         
+        project_url = project_url.replace(".git", "")
         logging.info(f"Processing project: {project_url}")
 
         if not project_url:
@@ -498,7 +501,7 @@ def callback_func(ch, method, properties, body):
 
         _generate_lock_files(project_url)
 
-        _execute_commands(command_list, project_url, res_payload, commit_hash)
+        _execute_commands(command_list, project_url, res_payload, commit_hash, access_token)
 
 
         _cleanup_project_source(project_url)
@@ -575,7 +578,7 @@ def _generate_lock_files(project_url: str) -> None:
         logging.error(f"Exception during lock files generation: {e}")
 
 
-def _execute_commands(command_list: list, project_url: str, res_payload: dict, commit_hash: str) -> None:
+def _execute_commands(command_list: list, project_url: str, res_payload: dict, commit_hash: str, access_token: str) -> None:
     """
     执行命令列表
     
@@ -593,36 +596,51 @@ def _execute_commands(command_list: list, project_url: str, res_payload: dict, c
             'package-info': get_package_info,
             'ohpm-info': get_ohpm_info
         }
-
+    
+    command_switch = {
+        'binary-checker': lambda: _handle_binary_checker(project_url, res_payload),
+        'release-checker': lambda: _handle_release_checker(project_url, res_payload),
+        'url-checker': lambda: _handle_url_checker(project_url, res_payload),
+        'sonar-scanner': lambda: _handle_sonar_scanner(project_url, res_payload),
+        'osv-scanner': lambda: _handle_shell_script_command('osv-scanner', project_url, res_payload),
+        'scancode': lambda: _handle_shell_script_command('scancode', project_url, res_payload),
+        'dependency-checker': lambda: _handle_shell_script_command('dependency-checker', project_url, res_payload),
+        'readme-checker': lambda: _handle_shell_script_command('readme-checker', project_url, res_payload),
+        'maintainers-checker': lambda: _handle_shell_script_command('maintainers-checker', project_url, res_payload),
+        'languages-detector': lambda: _handle_shell_script_command('languages-detector', project_url, res_payload),
+        'oat-scanner': lambda: _handle_shell_script_command('oat-scanner', project_url, res_payload),
+        'license-detector': lambda: _handle_shell_script_command('license-detector', project_url, res_payload),
+        'api-doc-checker': lambda: _handle_general_doc_checker(project_url, res_payload, "api-doc"),
+        'build-doc-checker': lambda: _handle_general_doc_checker(project_url, res_payload, "build-doc"),
+        'readme-opensource-checker': lambda: _handle_readme_opensource_checker(project_url, res_payload),
+        'bestpractices-checker': lambda: bestpractices_checker(project_url, res_payload),
+        'dangerous-workflow-checker': lambda: dangerous_workflow_checker(project_url, res_payload),
+        'fuzzing-checker': lambda: fuzzing_checker(project_url, res_payload),
+        'packaging-checker': lambda: packaging_checker(project_url, res_payload),
+        'pinned-dependencies-checker': lambda: pinned_dependencies_checker(project_url, res_payload),
+        'sast-checker': lambda: sast_checker(project_url, res_payload),
+        'security-policy-checker': lambda: security_policy_checker(project_url, res_payload),
+        'token-permissions-checker': lambda: token_permissions_checker(project_url, res_payload),
+        'webhooks-checker': lambda: webhooks_checker(project_url, res_payload, access_token),
+        'changed-files-since-commit-detector': lambda: _handle_changed_files_detector(project_url, res_payload, commit_hash),
+        'criticality-score': lambda: _handle_standard_command('criticality-score', project_url, res_payload, command_handlers),
+        'scorecard-score': lambda: _handle_standard_command('scorecard-score', project_url, res_payload, command_handlers),
+        'code-count': lambda: _handle_standard_command('code-count', project_url, res_payload, command_handlers),
+        'package-info': lambda: _handle_standard_command('package-info', project_url, res_payload, command_handlers),
+        'ohpm-info': lambda: _handle_standard_command('ohpm-info', project_url, res_payload, command_handlers),
+    }
+    
     for command in command_list:
-        try:
-            if command == 'binary-checker':
-                _handle_binary_checker(project_url, res_payload)
-            elif command == 'release-checker':
-                _handle_release_checker(project_url, res_payload)
-            elif command == 'url-checker':
-                _handle_url_checker(project_url, res_payload)
-            elif command == 'sonar-scanner':
-                _handle_sonar_scanner(project_url, res_payload)
-            elif command in ['osv-scanner', 'scancode', 'dependency-checker', 'readme-checker', 
-                           'maintainers-checker', 'languages-detector', 'oat-scanner', 'license-detector']:
-                _handle_shell_script_command(command, project_url, res_payload)
-            elif command == 'api-doc-checker':
-                _handle_general_doc_checker(project_url, res_payload, "api-doc")
-            elif command == 'build-doc-checker':
-                _handle_general_doc_checker(project_url, res_payload, "build-doc")
-            elif command == 'readme-opensource-checker':
-                _handle_readme_opensource_checker(project_url, res_payload)
-            elif command == 'changed-files-since-commit-detector':
-                _handle_changed_files_detector(project_url, res_payload, commit_hash)
-            elif command in command_handlers:
-                _handle_standard_command(command, project_url, res_payload, command_handlers)
-            else:
-                logging.warning(f"Unknown command: {command}")
-                
-        except Exception as e:
-            logging.error(f"Error executing command {command}: {e}")
-            res_payload["scan_results"][command] = {"error": str(e)}
+        if command in command_switch:
+            try:
+                logging.info(f"{command} job done: {project_url}")
+                command_switch[command]()
+            except Exception as e:
+                logging.error(f"Error executing command {command}: {e}")
+                res_payload["scan_results"][command] = {"error": str(e)}
+        else:
+            logging.warning(f"Unknown command: {command}")
+        
 
 
 def _handle_shell_script_command(command: str, project_url: str, res_payload: dict) -> None:
@@ -1203,6 +1221,7 @@ def _handle_readme_opensource_checker(project_url: str, res_payload: dict) -> No
         logging.error(f"readme-opensource-checker job failed: {project_url}, error: {e}")
         res_payload["scan_results"]["readme-opensource-checker"] = {"error": str(e)}
 
+        
 
 def _handle_build_doc_checker(project_url: str, res_payload: dict) -> None:
     """处理构建文档检查器"""

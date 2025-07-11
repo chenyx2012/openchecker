@@ -46,6 +46,7 @@ class OpenCheck(Resource):
             "command_list": payload['commands'],
             "project_url": payload['project_url'],
             "commit_hash": payload.get("commit_hash"),
+            "access_token": payload.get("access_token"),
             "callback_url": payload['callback_url'],
             "task_metadata": payload['task_metadata']
         }
