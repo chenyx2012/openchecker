@@ -1,7 +1,11 @@
 import pika
 from helper import read_config
-import logging, time
+import time
 import threading
+from openchecker.logger import get_logger
+
+# Get logger for message queue module
+logger = get_logger('openchecker.queue')
 
 def create_queue(config, queue_name, arguments={}):
     credentials = pika.PlainCredentials(config['username'], config['password'])
@@ -12,15 +16,15 @@ def create_queue(config, queue_name, arguments={}):
         channel = connection.channel()
 
         queue = channel.queue_declare(queue=queue_name, arguments=arguments, passive=True)
-        logging.info("Queue {} exists, pass creating!".format(queue_name))
+        logger.info(f"Queue {queue_name} already exists, skipping creation")
 
     except pika.exceptions.ChannelClosed as e:
-        logging.info("Queue {} does not exist, created!".format(queue_name))
+        logger.info(f"Queue {queue_name} does not exist, creating now")
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
         queue = channel.queue_declare(queue=queue_name, arguments=arguments)
     except Exception as e:
-        logging.info(f"Error connecting to RabbitMQ: {str(e)}")
+        logger.error(f"Failed to connect to RabbitMQ: {str(e)}")
         exit()
 
     connection.close()
@@ -34,10 +38,10 @@ def publish_message(config, queue_name, message_body):
         channel = connection.channel()
         channel.basic_publish(exchange='', routing_key=queue_name, body=message_body)
         connection.close()
-        logging.info(f"Publish message successed!")
+        logger.info(f"Message published successfully")
         return None
     except Exception as e:
-        logging.info("Publish message failed as: {}".format(e))
+        logger.error(f"Message publishing failed: {e}")
         return str(e)
 
 def consumer(config, queue_name, callback_func):
@@ -58,7 +62,7 @@ def consumer(config, queue_name, callback_func):
                     if connection and connection.is_open:
                         connection.process_data_events()
                 except Exception as e:
-                    logging.error(f"Heartbeat error: {e}")
+                    logger.error(f"Heartbeat error: {e}")
                 time.sleep(max(1, int(config['heartbeat_interval_s']) // 2))
         finally:
             heartbeat_running = False
@@ -80,12 +84,12 @@ def consumer(config, queue_name, callback_func):
             heartbeat_thread.start()
 
             channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=False)
-            logging.info('Consumer connected, wating for messages...')
+            logger.info('Consumer connected, waiting for messages...')
             channel.start_consuming()
 
         except pika.exceptions.ConnectionClosedByBroker as e:
-            logging.error(f"Connection closed by broker: {e}")
-            logging.info("Retrying...")
+            logger.error(f"Agent closed connection: {e}")
+            logger.info("Retrying...")
             if heartbeat_thread:
                 heartbeat_running = False
                 heartbeat_thread.join(timeout=2)
@@ -93,8 +97,8 @@ def consumer(config, queue_name, callback_func):
             continue
 
         except pika.exceptions.AMQPChannelError as e:
-            logging.error(f"AMQP channel error: {e}")
-            logging.info("Retrying...")
+            logger.error(f"AMQP channel error: {e}")
+            logger.info("Retrying...")
             if heartbeat_thread:
                 heartbeat_running = False
                 heartbeat_thread.join(timeout=2)
@@ -102,7 +106,7 @@ def consumer(config, queue_name, callback_func):
             continue
 
         except Exception as e:
-            logging.error(f"Consumer failed: {e}")
+            logger.error(f"Consumer failed: {e}")
             if heartbeat_thread:
                 heartbeat_running = False
                 heartbeat_thread.join(timeout=2)
@@ -133,7 +137,7 @@ def check_queue_status(config, queue_name):
         connection.close()
         return messages_in_queue, consumers_on_queue
     except Exception as e:
-        logging.info(f"Error checking queue status: {str(e)}")
+        logger.info(f"Error checking queue status: {str(e)}")
         return None, None
 
 def get_queue_info(config, queue_name):
@@ -150,7 +154,7 @@ def get_queue_info(config, queue_name):
         connection.close()
         return queue_arguments
     except Exception as e:
-        logging.info(f"Error getting queue info: {str(e)}")
+        logger.info(f"Error getting queue info: {str(e)}")
         return None
 
 def view_queue_logs(log_file_path):
@@ -160,7 +164,7 @@ def view_queue_logs(log_file_path):
             queue_logs = [log for log in logs if "Queue" in log]
             return queue_logs
     except Exception as e:
-        logging.info(f"Error viewing queue logs: {str(e)}")
+        logger.info(f"Error viewing queue logs: {str(e)}")
         return None
 
 def delete_queue(config, queue_name):
@@ -172,9 +176,9 @@ def delete_queue(config, queue_name):
         channel = connection.channel()
         channel.queue_delete(queue=queue_name)
         connection.close()
-        logging.info(f"Queue {queue_name} deleted successfully.")
+        logger.info(f"Queue {queue_name} deleted successfully.")
     except Exception as e:
-        logging.info(f"Error deleting queue {queue_name}: {str(e)}")
+        logger.info(f"Error deleting queue {queue_name}: {str(e)}")
 
 def purge_queue(config, queue_name):
     credentials = pika.PlainCredentials(config['username'], config['password'])
@@ -185,9 +189,9 @@ def purge_queue(config, queue_name):
         channel = connection.channel()
         channel.queue_purge(queue=queue_name)
         connection.close()
-        logging.info(f"Queue {queue_name} purged successfully.")
+        logger.info(f"Queue {queue_name} purged successfully.")
     except Exception as e:
-        logging.info(f"Error purging queue {queue_name}: {str(e)}")
+        logger.info(f"Error purging queue {queue_name}: {str(e)}")
 
 def test_rabbitmq_connection(config):
     credentials = pika.PlainCredentials(config['username'], config['password'])
@@ -196,9 +200,9 @@ def test_rabbitmq_connection(config):
     try:
         connection = pika.BlockingConnection(parameters)
         connection.close()
-        logging.info("RabbitMQ connection successful.")
+        logger.info("RabbitMQ connection successful.")
     except Exception as e:
-        logging.info(f"Error connecting to RabbitMQ: {str(e)}")
+        logger.info(f"Error connecting to RabbitMQ: {str(e)}")
 
 if __name__ == "__main__":
     config = read_config('config/config.ini', "RabbitMQ")

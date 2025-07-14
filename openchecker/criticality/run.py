@@ -17,7 +17,7 @@ import argparse
 import csv
 import datetime
 import json
-import logging
+from openchecker.logger import get_logger
 import math
 import os
 import sys
@@ -33,7 +33,7 @@ import requests
 from .defaults import *  # pylint: disable=wildcard-import
 
 
-logger = logging.getLogger()
+logger = get_logger('openchecker.criticality.run')
 
 _DEPRECATION_MESSAGE = """
 The python version of criticality-score is deprecated and will
@@ -654,16 +654,6 @@ def get_repository(url):
 
     raise Exception('Unsupported url!')
 
-
-def initialize_logging_handlers():
-    logging.basicConfig(level=logging.INFO)
-    logging.getLogger('').handlers.clear()
-
-    console = logging.StreamHandler()
-    console.setLevel(logging.INFO)
-    logging.getLogger('').addHandler(console)
-
-
 def override_params(override_params):
     for override_param in override_params:
         temp = override_param.split(':',1)
@@ -750,7 +740,6 @@ def main():
         help='Overriding parameters in form <name>:<weight>:<max_threshold>',
         required=False)
 
-    initialize_logging_handlers()
     args = parser.parse_args()
     if args.overrides:
         override_params(args.overrides)

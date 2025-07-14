@@ -6,20 +6,12 @@ SBOM检查的Python实现
 
 import os
 import re
-import json
-import subprocess
 from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
-import logging
-import requests
-import zipfile
-import io
-from openchecker.agent import get_all_releases_with_assets
+from openchecker.logger import get_logger
 
-# 配置日志
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = get_logger('openchecker.sbom.sbom_checker')
 
 
 class FileType(Enum):

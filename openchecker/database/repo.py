@@ -1,15 +1,12 @@
-import logging
 import urllib3
 import time
 from urllib.parse import urlparse
 from elasticsearch import Elasticsearch, RequestsHttpConnection
-import logging
+from openchecker.logger import get_logger
 import time
 import urllib3
-import json
-import logging
 
-logger = logging.getLogger(__name__)
+logger = get_logger('openchecker.database.repo')
 urllib3.disable_warnings()
 
 
@@ -189,14 +186,14 @@ if __name__ == '__main__':
             result_projects_file_path = f"/home/guoqiang/opencheck/test/projects/all_projects_part_{file_index}.json"
             with open(result_projects_file_path, 'w', encoding='utf-8') as f:
                 json.dump(projects, f, ensure_ascii=True)
-                logging.info("write back to: ", result_projects_file_path)
+                logger.info("write back to: ", result_projects_file_path)
 
             projects = []
             
     result_projects_file_path = "/home/guoqiang/opencheck/test/projects/all_projects_part_end.json"
     with open(result_projects_file_path, 'w', encoding='utf-8') as f:
         json.dump(projects, f, ensure_ascii=True)
-        logging.info("write back to: ", result_projects_file_path)
+        logger.info("write back to: ", result_projects_file_path)
     
     '''
     
