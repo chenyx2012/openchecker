@@ -18,15 +18,15 @@ from typing import Any, List, Dict
 from pathlib import Path
 from platform_adapter import platform_manager
 from common import shell_exec
-from checks.fuzzing_checker import fuzzing_checker
-from checks.dangerous_workflow_checker import dangerous_workflow_checker
-from checks.bestpractices_checker import bestpractices_checker
-from checks.packaging_checker import packaging_checker
-from checks.pinned_dependencies_checker import pinned_dependencies_checker
-from checks.sast_checker import sast_checker
-from checks.security_policy_checker import security_policy_checker
-from checks.token_permissions_checker import token_permissions_checker
-from checks.webhooks_checker import webhooks_checker
+from checkers.fuzzing_checker import fuzzing_checker
+from checkers.dangerous_workflow_checker import dangerous_workflow_checker
+from checkers.bestpractices_checker import bestpractices_checker
+from checkers.packaging_checker import packaging_checker
+from checkers.pinned_dependencies_checker import pinned_dependencies_checker
+from checkers.sast_checker import sast_checker
+from checkers.security_policy_checker import security_policy_checker
+from checkers.token_permissions_checker import token_permissions_checker
+from checkers.webhooks_checker import webhooks_checker
 from logger import get_logger, log_performance, setup_logging
 
 setup_logging(
