@@ -7,7 +7,7 @@
 
 import re
 import json
-from openchecker.logger import get_logger
+from logger import get_logger
 import requests
 from typing import Dict, List, Tuple, Optional, Any
 from urllib.parse import urlparse

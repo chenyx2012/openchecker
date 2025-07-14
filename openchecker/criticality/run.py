@@ -17,7 +17,7 @@ import argparse
 import csv
 import datetime
 import json
-from openchecker.logger import get_logger
+from logger import get_logger
 import math
 import os
 import sys

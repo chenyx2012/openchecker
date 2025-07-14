@@ -9,7 +9,7 @@ import re
 from typing import List, Dict, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
-from openchecker.logger import get_logger
+from logger import get_logger
 
 logger = get_logger('openchecker.sbom.sbom_checker')
 

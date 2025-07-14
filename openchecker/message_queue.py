@@ -2,7 +2,7 @@ import pika
 from helper import read_config
 import time
 import threading
-from openchecker.logger import get_logger
+from logger import get_logger
 
 # Get logger for message queue module
 logger = get_logger('openchecker.queue')

@@ -2,7 +2,7 @@ import urllib3
 import time
 from urllib.parse import urlparse
 from elasticsearch import Elasticsearch, RequestsHttpConnection
-from openchecker.logger import get_logger
+from logger import get_logger
 import time
 import urllib3
 

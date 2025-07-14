@@ -6,7 +6,7 @@ from datetime import timedelta
 import os
 from message_queue import test_rabbitmq_connection, create_queue, publish_message
 from helper import read_config
-from openchecker.logger import setup_logging, get_logger, log_performance
+from logger import setup_logging, get_logger, log_performance
 import json
 import uuid
 
@@ -15,7 +15,7 @@ setup_logging(
     log_level=os.getenv('LOG_LEVEL', 'INFO'),
     log_format=os.getenv('LOG_FORMAT', 'structured'),
     enable_console=True,
-    enable_file=True,
+    enable_file=False,
     log_dir='logs'
 )
 
@@ -122,20 +122,20 @@ api.add_resource(Test, '/test')
 api.add_resource(OpenCheck, '/opencheck')
 
 
-@log_performance('openchecker.init')
+# @log_performance('openchecker.init')
 def init():
     """Initialize application"""
     logger.info("Starting application initialization")
     
     try:
         test_rabbitmq_connection(config)
-        logger.info("RabbitMQ connection test successful")
+        # logger.info("RabbitMQ connection test successful")
         
         create_queue(config, "dead_letters")
-        logger.info("Dead letter queue created successfully")
+        # logger.info("Dead letter queue created successfully")
         
         create_queue(config, "opencheck", arguments={'x-dead-letter-exchange': '', 'x-dead-letter-routing-key': 'dead_letters'})
-        logger.info("Main queue created successfully")
+        # logger.info("Main queue created successfully")
         
         logger.info("Application initialization completed")
     except Exception as e:

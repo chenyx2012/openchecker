@@ -32,6 +32,9 @@ class StructuredFormatter(logging.Formatter):
                 'traceback': traceback.format_exception(*record.exc_info)
             }
         
+        # Add the actual message content
+        record.structured_data['message'] = record.getMessage()
+        
         # If there are extra parameters, add them to structured data
         if hasattr(record, 'extra_fields'):
             record.structured_data.update(record.extra_fields)
@@ -176,6 +179,35 @@ def setup_logging(
             'openchecker.queue': {  # message queue module
                 'handlers': list(handlers.keys()),
                 'level': log_level,
+                'propagate': False
+            },
+            # set log level for some third-party libraries
+            'pika': {
+                'level': 'WARNING',
+                'propagate': False
+            },
+            'werkzeug': {
+                'level': 'WARNING',
+                'propagate': False
+            },
+            'urllib3': {
+                'level': 'WARNING',
+                'propagate': False
+            },
+            'requests': {
+                'level': 'WARNING',
+                'propagate': False
+            },
+            'flask': {
+                'level': 'WARNING',
+                'propagate': False
+            },
+            'flask_restful': {
+                'level': 'WARNING',
+                'propagate': False
+            },
+            'flask_jwt': {
+                'level': 'WARNING',
                 'propagate': False
             }
         }

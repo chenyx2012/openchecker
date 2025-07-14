@@ -27,8 +27,15 @@ from checks.sast_checker import sast_checker
 from checks.security_policy_checker import security_policy_checker
 from checks.token_permissions_checker import token_permissions_checker
 from checks.webhooks_checker import webhooks_checker
-from openchecker.logger import get_logger, log_performance
+from logger import get_logger, log_performance, setup_logging
 
+setup_logging(
+    log_level=os.getenv('LOG_LEVEL', 'INFO'),
+    log_format=os.getenv('LOG_FORMAT', 'structured'),
+    enable_console=True,
+    enable_file=False,
+    log_dir='logs'
+)
 # Get logger for agent module
 logger = get_logger('openchecker.agent')
 
@@ -649,7 +656,6 @@ def _execute_commands(command_list: list, project_url: str, res_payload: dict, c
     for command in command_list:
         if command in command_switch:
             try:
-                logger.info(f"{command} job done: {project_url}")
                 command_switch[command]()
             except Exception as e:
                 logger.error(f"Error executing command {command}: {e}")
