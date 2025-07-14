@@ -1024,7 +1024,7 @@ def run_criticality_score(project_url):
             except json.JSONDecodeError as e:
                 logging.error(f"Failed to parse criticality score JSON: {e}")
                 return None, "Failed to parse criticality score JSON."
-            return criticality_score, None
+            return {"criticality_score": criticality_score}, None
     else:
         return None, "URL is not supported by criticality score."
 
@@ -1069,7 +1069,7 @@ def get_code_count(project_url):
             return 0, None
         result_json = json.loads(result.stdout)
         code_count = result_json['SUM']['code']
-        return code_count, None
+        return {"code_count": code_count}, None
     else:
         return None, "Failed to get code count."
 
