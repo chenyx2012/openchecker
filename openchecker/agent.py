@@ -1,42 +1,58 @@
-import subprocess
-from message_queue import consumer
-from helper import read_config
-from datetime import datetime
-from exponential_backoff import post_with_backoff
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+OpenChecker Agent Module
+
+This module provides the main agent functionality for processing project check tasks
+from message queues. It handles downloading project sources, executing various checkers,
+and sending results back via callbacks.
+
+Author: OpenChecker Team
+"""
+
+# Standard library imports
 import json
-import requests
-import re
-import time
 import os
-import zipfile
-import io
-from urllib.parse import urlparse
-from constans import shell_script_handlers
-from typing import Any, List, Dict
-from pathlib import Path
-from platform_adapter import platform_manager
-from common import shell_exec
-from checkers.fuzzing_checker import fuzzing_checker
-from checkers.dangerous_workflow_checker import dangerous_workflow_checker
+import re
+from datetime import datetime
+from typing import Any, Dict, List
+
+# Local imports
 from checkers.bestpractices_checker import bestpractices_checker
+from checkers.binary_checker import binary_checker
+from checkers.changed_files_checker import changed_files_detector
+from checkers.dangerous_workflow_checker import dangerous_workflow_checker
+from checkers.document_checker import (
+    api_doc_checker,
+    build_doc_checker,
+    readme_opensource_checker
+)
+from checkers.fuzzing_checker import fuzzing_checker
 from checkers.packaging_checker import packaging_checker
 from checkers.pinned_dependencies_checker import pinned_dependencies_checker
+from checkers.release_checker import release_checker
 from checkers.sast_checker import sast_checker
 from checkers.security_policy_checker import security_policy_checker
-from checkers.token_permissions_checker import token_permissions_checker
-from checkers.webhooks_checker import webhooks_checker
-from checkers.document_checker import api_doc_checker, build_doc_checker, readme_opensource_checker
-from checkers.release_checker import release_checker
-from checkers.binary_checker import binary_checker
-from checkers.url_checker import url_checker
 from checkers.sonar_checker import sonar_checker
 from checkers.standard_command_checker import (
-    criticality_score_checker, scorecard_score_checker, code_count_checker,
-    package_info_checker, ohpm_info_checker
+    code_count_checker,
+    criticality_score_checker,
+    ohpm_info_checker,
+    package_info_checker,
+    scorecard_score_checker
 )
-from checkers.changed_files_checker import changed_files_detector
+from checkers.token_permissions_checker import token_permissions_checker
+from checkers.url_checker import url_checker
+from checkers.webhooks_checker import webhooks_checker
+from common import shell_exec
+from constans import shell_script_handlers
+from exponential_backoff import post_with_backoff
+from helper import read_config
 from logger import get_logger, log_performance, setup_logging
+from message_queue import consumer
+from platform_adapter import platform_manager
 
+# Setup logging
 setup_logging(
     log_level=os.getenv('LOG_LEVEL', 'INFO'),
     log_format=os.getenv('LOG_FORMAT', 'structured'),
@@ -44,16 +60,27 @@ setup_logging(
     enable_file=False,
     log_dir='logs'
 )
+
 # Get logger for agent module
 logger = get_logger('openchecker.agent')
 
-
+# Configuration setup
 file_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(file_dir)
 config_file = os.path.join(project_root, "config", "config.ini")
 config = read_config(config_file)
 
-def get_licenses_name(data):
+
+def get_licenses_name(data: Dict[str, Any]) -> str:
+    """
+    Extract license name from license data.
+    
+    Args:
+        data: License data dictionary
+        
+    Returns:
+        License name or None if not found
+    """
     return next(
         (license['meta']['title'] 
          for license in data.get('licenses', []) 
@@ -61,15 +88,26 @@ def get_licenses_name(data):
         None
     )
 
-def ruby_licenses(data):
+
+def ruby_licenses(data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Process Ruby licenses by detecting missing licenses from GitHub repositories.
+    
+    Args:
+        data: Dependency checker output data
+        
+    Returns:
+        Updated data with detected licenses
+    """
     github_url_pattern = "https://github.com/"
+    
     for item in data["analyzer"]["result"]["packages"]:
         declared_licenses = item["declared_licenses"]
         homepage_url = item.get('homepage_url', '')
         vcs_url = item.get('vcs_processed', {}).get('url', '').replace('.git', '')
 
         # Check if declared_licenses is empty
-        if not declared_licenses or len(declared_licenses)==0:
+        if not declared_licenses or len(declared_licenses) == 0:
             # Prioritize checking if vcs_url is a GitHub address
             if vcs_url.startswith(github_url_pattern):
                 project_url = vcs_url
@@ -77,11 +115,13 @@ def ruby_licenses(data):
                 project_url = homepage_url
             else:
                 project_url = None
+                
             # If a valid GitHub address is found, clone the repository and call licensee
             if project_url:
                 shell_script = shell_script_handlers["license-detector"].format(project_url=project_url)
                 result, error = shell_exec(shell_script)
-                if error == None:
+                
+                if error is None:
                     try:
                         license_info = json.loads(result)
                         licenses_name = get_licenses_name(license_info)
@@ -89,23 +129,39 @@ def ruby_licenses(data):
                     except json.JSONDecodeError as e:
                         logger.error(f"Failed to parse JSON from {project_url}: {e}")
                 else:
-                    logger.error("ruby_licenses job failed: {}, error: {}".format(project_url, error))
+                    logger.error(f"ruby_licenses job failed: {project_url}, error: {error}")
+    
     return data
 
-def dependency_checker_output_process(output):
+
+def dependency_checker_output_process(output: bytes) -> Dict[str, Any]:
+    """
+    Process dependency checker output and categorize packages by license status.
+    
+    Args:
+        output: Raw output from dependency checker
+        
+    Returns:
+        Processed result with categorized packages
+    """
     if not bool(output):
         return {}
 
     result = json.loads(output.decode('utf-8'))
     result = ruby_licenses(result)
+    
     try:
         packages = result["analyzer"]["result"]["packages"]
-        result = {"packages_all": [], "packages_with_license_detect": [], "packages_without_license_detect": []}
+        result = {
+            "packages_all": [],
+            "packages_with_license_detect": [],
+            "packages_without_license_detect": []
+        }
 
         for package in packages:
             result["packages_all"].append(package["purl"])
             license = package["declared_licenses"]
-            if license != None and len(license) > 0:
+            if license is not None and len(license) > 0:
                 result["packages_with_license_detect"].append(package["purl"])
             else:
                 result["packages_without_license_detect"].append(package["purl"])
@@ -117,7 +173,17 @@ def dependency_checker_output_process(output):
     return result
 
 
-def request_url (url, payload):
+def request_url(url: str, payload: Dict[str, Any]) -> tuple[str, str]:
+    """
+    Send HTTP POST request with exponential backoff.
+    
+    Args:
+        url: Target URL
+        payload: Request payload
+        
+    Returns:
+        Tuple of (response_text, error_message)
+    """
     response = post_with_backoff(url=url, json=payload)
 
     if response.status_code == 200:
@@ -126,83 +192,10 @@ def request_url (url, payload):
         return None, f"Failed to send request. Status code: {response.status_code}"
 
 
-
-
-
-
-
-
-def _check_zip_contents(zip_url, file_patterns):
-    """
-    Check contents in zip file.
-    
-    Args:
-        zip_url (str): zip file download URL
-        file_patterns (list): List of file matching patterns
-        
-    Returns:
-        tuple: (found_files, error_msg)
-            found_files: List of found files
-            error_msg: Error message, None if no error
-    """
-    try:
-        response = requests.get(zip_url, timeout=30)
-        if response.status_code != 200:
-            return [], f"Failed to download release zip: {response.status_code}"
-        
-        with zipfile.ZipFile(io.BytesIO(response.content), 'r') as zip_ref:
-            found_files = []
-            for file_pattern in file_patterns:
-                if isinstance(file_pattern, str):
-                    for file_name in zip_ref.namelist():
-                        base_name = os.path.basename(file_name).lower()
-                        if base_name == file_pattern.lower():
-                            found_files.append(file_name)
-                else:
-                    for file_name in zip_ref.namelist():
-                        if re.match(file_pattern, file_name):
-                            found_files.append(file_name)
-            
-            return found_files, None
-            
-    except requests.exceptions.Timeout:
-        return [], "Download timeout"
-    except requests.exceptions.RequestException as e:
-        return [], f"Download failed: {str(e)}"
-    except zipfile.BadZipFile:
-        return [], "Invalid zip file"
-    except Exception as e:
-        return [], f"Failed to check release zip: {str(e)}"
-
-
-def _create_result_entry(tag, release_name, has_content, content_files, error_msg):
-    """
-    Create result entry.
-    
-    Args:
-        tag (str): Tag name
-        release_name (str): Release name
-        has_content (bool): Whether there is content
-        content_files (list): List of content files
-        error_msg (str): Error message
-        
-    Returns:
-        dict: Result entry
-    """
-    return {
-        "tag": tag,
-        "release_name": release_name,
-        "has_content": has_content,
-        "content_files": content_files,
-        "error": error_msg
-    }
-
-
-
 @log_performance('openchecker.agent')
 def callback_func(ch, method, properties, body):
     """
-    Message queue callback function, handles project check tasks
+    Message queue callback function, handles project check tasks.
     
     Args:
         ch: Message channel
@@ -210,12 +203,18 @@ def callback_func(ch, method, properties, body):
         properties: Message properties
         body: Message body
     """
-    logger.info(f"Starting to process message queue task", 
-               extra={'extra_fields': {
-                   'delivery_tag': method.delivery_tag,
-                   'timestamp': datetime.now().isoformat()
-               }})
+    logger.info(
+        "Starting to process message queue task",
+        extra={
+            'extra_fields': {
+                'delivery_tag': method.delivery_tag,
+                'timestamp': datetime.now().isoformat()
+            }
+        }
+    )
 
+    original_cwd = os.getcwd()
+    
     try:
         message = json.loads(body.decode('utf-8'))
         command_list = message.get('command_list', [])
@@ -227,14 +226,18 @@ def callback_func(ch, method, properties, body):
         version_number = task_metadata.get("version_number", "None")
         
         project_url = project_url.replace(".git", "")
-        logger.info(f"Starting to process project: {project_url}", 
-                   extra={'extra_fields': {
-                       'project_url': project_url,
-                       'command_count': len(command_list),
-                       'commands': command_list,
-                       'callback_url': callback_url,
-                       'version_number': version_number
-                   }})
+        logger.info(
+            f"Starting to process project: {project_url}",
+            extra={
+                'extra_fields': {
+                    'project_url': project_url,
+                    'command_count': len(command_list),
+                    'commands': command_list,
+                    'callback_url': callback_url,
+                    'version_number': version_number
+                }
+            }
+        )
 
         if not project_url:
             logger.error("Project URL is required")
@@ -246,8 +249,6 @@ def callback_func(ch, method, properties, body):
         if not os.path.exists(repos_dir):
             os.makedirs(repos_dir, exist_ok=True)
             logger.info(f"Created repository directory: {repos_dir}")
-
-        original_cwd = os.getcwd()
 
         os.chdir(repos_dir)
         logger.info(f"Switched to working directory: {os.getcwd()}")
@@ -264,24 +265,25 @@ def callback_func(ch, method, properties, body):
             return
 
         _generate_lock_files(project_url)
-
         _execute_commands(command_list, project_url, res_payload, commit_hash, access_token)
-
         _cleanup_project_source(project_url)
 
         os.chdir(original_cwd)
         logger.info(f"Restored working directory: {os.getcwd()}")
 
         _send_results(callback_url, res_payload)
-        
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
-        logger.info(f"Project {project_url} processed successfully", 
-                   extra={'extra_fields': {
-                       'project_url': project_url,
-                       'command_count': len(command_list),
-                       'timestamp': datetime.now().isoformat()
-                   }})
+        logger.info(
+            f"Project {project_url} processed successfully",
+            extra={
+                'extra_fields': {
+                    'project_url': project_url,
+                    'command_count': len(command_list),
+                    'timestamp': datetime.now().isoformat()
+                }
+            }
+        )
         
     except Exception as e:
         logger.error(f"Error occurred while processing message: {e}", exc_info=True)
@@ -297,14 +299,14 @@ def callback_func(ch, method, properties, body):
 
 def _download_project_source(project_url: str, version_number: str) -> bool:
     """
-    Download project source code
+    Download project source code.
     
     Args:
         project_url: Project URL
         version_number: Version number
         
     Returns:
-        bool: Whether successful
+        Whether successful
     """
     try:
         shell_script = shell_script_handlers["download-checkout"].format(
@@ -327,7 +329,7 @@ def _download_project_source(project_url: str, version_number: str) -> bool:
 
 def _generate_lock_files(project_url: str) -> None:
     """
-    Generate lock files
+    Generate lock files.
     
     Args:
         project_url: Project URL
@@ -345,19 +347,23 @@ def _generate_lock_files(project_url: str) -> None:
         logger.error(f"Lock files generation exception: {e}")
 
 
-def _execute_commands(command_list: list, project_url: str, res_payload: dict, commit_hash: str, access_token: str) -> None:
+def _execute_commands(
+    command_list: List[str],
+    project_url: str,
+    res_payload: Dict[str, Any],
+    commit_hash: str,
+    access_token: str
+) -> None:
     """
-    Execute command list
+    Execute command list.
     
     Args:
         command_list: Command list
         project_url: Project URL
         res_payload: Response payload
         commit_hash: Commit hash
+        access_token: Access token
     """
-
-
-    
     command_switch = {
         'binary-checker': lambda: binary_checker(project_url, res_payload),
         'release-checker': lambda: release_checker(project_url, res_payload),
@@ -400,12 +406,15 @@ def _execute_commands(command_list: list, project_url: str, res_payload: dict, c
                 res_payload["scan_results"][command] = {"error": str(e)}
         else:
             logger.warning(f"Unknown command: {command}")
-        
 
 
-def _handle_shell_script_command(command: str, project_url: str, res_payload: dict) -> None:
+def _handle_shell_script_command(
+    command: str,
+    project_url: str,
+    res_payload: Dict[str, Any]
+) -> None:
     """
-    Generic function to handle shell script commands
+    Generic function to handle shell script commands.
     
     Args:
         command: Command name
@@ -434,9 +443,9 @@ def _handle_shell_script_command(command: str, project_url: str, res_payload: di
         res_payload["scan_results"][command] = {"error": str(e)}
 
 
-def _process_command_result(command: str, result) -> Any:
+def _process_command_result(command: str, result: bytes) -> Any:
     """
-    Process results according to command type
+    Process results according to command type.
     
     Args:
         command: Command name
@@ -460,33 +469,19 @@ def _process_command_result(command: str, result) -> Any:
     
     if command == 'dependency-checker':
         return dependency_checker_output_process(result)
-
     elif command == 'oat-scanner':
         return parse_oat_txt_to_json(result_str)
     
     return result_str
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 def _cleanup_project_source(project_url: str) -> None:
-    """Clean up project source code"""
+    """
+    Clean up project source code.
+    
+    Args:
+        project_url: Project URL
+    """
     try:
         shell_script = shell_script_handlers["remove-source-code"].format(project_url=project_url)
         result, error = shell_exec(shell_script)
@@ -500,8 +495,14 @@ def _cleanup_project_source(project_url: str) -> None:
         logger.error(f"Exception during source cleanup: {e}")
 
 
-def _send_results(callback_url: str, res_payload: dict) -> None:
-    """Send results"""
+def _send_results(callback_url: str, res_payload: Dict[str, Any]) -> None:
+    """
+    Send results to callback URL.
+    
+    Args:
+        callback_url: Callback URL
+        res_payload: Response payload
+    """
     if callback_url:
         try:
             response, err = request_url(callback_url, res_payload)
@@ -514,22 +515,28 @@ def _send_results(callback_url: str, res_payload: dict) -> None:
 
 
 def _handle_error_and_nack(ch, method, body, error_msg: str) -> None:
-    """Handle error and nack"""
+    """
+    Handle error and nack message.
+    
+    Args:
+        ch: Message channel
+        method: Message method
+        body: Message body
+        error_msg: Error message
+    """
     logger.error(f"Putting message to dead letters: {error_msg}")
     ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 
-
-
-def parse_oat_txt_to_json(txt):
+def parse_oat_txt_to_json(txt: str) -> Dict[str, Any]:
     """
-    Parse OAT tool output text report to JSON format
+    Parse OAT tool output text report to JSON format.
     
     Args:
-        txt (str): OAT tool output text content
+        txt: OAT tool output text content
         
     Returns:
-        dict: Parsed JSON format data
+        Parsed JSON format data
     """
     try:
         de_str = txt.decode('unicode_escape') if isinstance(txt, bytes) else txt
@@ -542,6 +549,7 @@ def parse_oat_txt_to_json(txt):
             line = line.strip()
             if not line:
                 continue
+                
             total_count_match = re.search(r"^(.*) Total Count:\s*(\d+)", line, re.MULTILINE)
             category_name = total_count_match.group(1).strip() if total_count_match else "Unknown"
 
@@ -565,8 +573,6 @@ def parse_oat_txt_to_json(txt):
     except Exception as e:
         logger.error(f"parse_oat_txt error: {e}")
         return {"error": str(e)}
-
-
 
 
 if __name__ == "__main__":
