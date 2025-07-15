@@ -1,0 +1,310 @@
+import os
+import subprocess
+import json
+import re
+import requests
+from typing import Dict, Tuple, Any
+from logger import get_logger
+
+logger = get_logger('openchecker.checkers.standard_command_checker')
+
+
+def run_criticality_score(project_url: str, config: dict) -> Tuple[Dict, str]:
+    """
+    Run criticality score analysis
+    
+    Args:
+        project_url: Project URL
+        config: Configuration dictionary
+        
+    Returns:
+        Tuple[Dict, str]: (result, error)
+    """
+    cmd = ["criticality_score", "--repo", project_url, "--format", "json"]
+    github_token = config["Github"]["access_key"]
+    os.environ['GITHUB_AUTH_TOKEN'] = github_token
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        json_str = result.stderr
+        json_str = json_str.replace("\n", "")
+        pattern = r'{.*?}'
+        match = re.search(pattern, json_str)
+        json_res = {}
+        if match:
+            json_score = match.group()
+            try:
+                json_res = json.loads(json_score)
+                criticality_score = json_res['criticality_score']
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse criticality score JSON: {e}")
+                return None, "Failed to parse criticality score JSON."
+            return {"criticality_score": criticality_score}, None
+    else:
+        return None, "URL is not supported by criticality score."
+
+
+def run_scorecard_cli(project_url: str) -> Tuple[Dict, str]:
+    """
+    Run scorecard CLI analysis
+    
+    Args:
+        project_url: Project URL
+        
+    Returns:
+        Tuple[Dict, str]: (result, error)
+    """
+    cmd = ["scorecard", "--repo", project_url, "--format", "json"]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        try:
+            scorecard_json = json.loads(result.stdout)
+            scorecard_json = simplify_scorecard(scorecard_json)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse scorecard JSON: {e}")
+            return None, "Failed to parse scorecard JSON."
+        return scorecard_json, None
+    else:
+        return None, "URL is not supported by scorecard CLI."
+
+
+def simplify_scorecard(data: Dict) -> Dict:
+    """
+    Simplify scorecard data
+    
+    Args:
+        data: Original scorecard data
+        
+    Returns:
+        Dict: Simplified scorecard data
+    """
+    simplified = {
+        "score": data["score"],
+        "checks": []
+    }
+    if data["checks"] is not None:
+        for check in data["checks"]:
+            simplified_check = {
+                "name": check["name"],
+                "score": check["score"]
+            }
+            simplified["checks"].append(simplified_check)
+    
+    return simplified
+
+
+def get_code_count(project_url: str) -> Tuple[Dict, str]:
+    """
+    Get code count using cloc
+    
+    Args:
+        project_url: Project URL
+        
+    Returns:
+        Tuple[Dict, str]: (result, error)
+    """
+    project_name = os.path.basename(project_url).replace('.git', '')
+
+    if not os.path.exists(project_name):
+        subprocess.run(["git", "clone", project_url, "--depth=1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    cmd = ["cloc", project_name, "--json"] 
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode == 0:
+        if result.stdout.strip() == "":
+            return {"code_count": 0}, None
+        result_json = json.loads(result.stdout)
+        code_count = result_json['SUM']['code']
+        return {"code_count": code_count}, None
+    else:
+        return None, "Failed to get code count."
+
+
+def get_package_info(project_url: str) -> Tuple[Dict, str]:
+    """
+    Get package information
+    
+    Args:
+        project_url: Project URL
+        
+    Returns:
+        Tuple[Dict, str]: (result, error)
+    """
+    urlList = project_url.split("/")
+    package_name = urlList[len(urlList) - 1]
+    url = f"https://registry.npmjs.org/{package_name}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        description = data['description']
+        home_url = data['homepage']
+        version_data = data["versions"]
+        *_, last_version = version_data.items()
+        dependency = last_version[1].get("dependencies", {})
+        dependent_count = len(dependency)
+        url_down = f"https://api.npmjs.org/downloads/range/last-month/{package_name}"
+        response_down = requests.get(url_down)
+        if response_down.status_code == 200:
+            down_data = response_down.json()
+            last_month = down_data['downloads']
+            down_count = 0
+            for ch in last_month:
+                down_count += ch['downloads']
+            day_enter = last_month[0]['day'] + " - " + last_month[len(last_month) - 1]['day']   
+            return {
+                "description": description, 
+                "home_url": home_url, 
+                "dependent_count": dependent_count, 
+                "down_count": down_count, 
+                "day_enter": day_enter
+                }, None
+        elif response.status_code == 404:
+            logger.error("Failed to get down_count for package: {} \n Error: Not found".format(package_name))
+            return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, "Not found"
+    else:
+        # Use platform adapter to get repo info
+        try:
+            from platform_adapter import platform_manager
+            repo_info, repo_error = platform_manager.get_repo_info(project_url)
+            download_stats, download_error = platform_manager.get_download_stats(project_url)
+            
+            if repo_error:
+                logger.error(f"Failed to get repo info for {project_url}: {repo_error}")
+                return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, repo_error
+                
+            description = repo_info.get("description", "")
+            home_url = repo_info.get("homepage", "")
+            down_count = download_stats.get("download_count", 0)
+            day_enter = download_stats.get("period", "")
+            
+            return {
+                "description": description, 
+                "home_url": home_url, 
+                "dependent_count": False, 
+                "down_count": down_count, 
+                "day_enter": day_enter
+            }, None
+        except Exception as e:
+            logger.error(f"Failed to get package info for {project_url}: {e}")
+            return {"description": False, "home_url": False, "dependent_count": False, "down_count": False, "day_enter": False}, str(e)
+
+
+def get_ohpm_info(project_url: str) -> Tuple[Dict, str]:
+    """
+    Get OHPM package information
+    
+    Args:
+        project_url: Project URL
+        
+    Returns:
+        Tuple[Dict, str]: (result, error)
+    """
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        abs_dir = os.path.dirname(os.path.dirname(script_dir))
+        file_path = os.path.join(abs_dir, 'config', 'ohpm_repo.json')
+        with open(file_path, 'r', encoding='utf-8') as file:
+            data = json.load(file)
+        project_url = project_url.replace('.git', '')
+        for name, repo_address in data.items():
+            if repo_address.lower() == project_url.lower():
+                url = 'https://ohpm.openharmony.cn/ohpmweb/registry/oh-package/openapi/v1/detail/'+ name
+                response = requests.get(url)
+                if response.status_code == 200:
+                    repo_body = json.loads(response.text)
+                    repo_json = repo_body['body']
+                    down_count = repo_json['downloads']
+                    dependent = repo_json['dependencies']['total']
+                    bedependent = repo_json['dependent']['total']
+                    return {"down_count": down_count, "dependent": dependent, "bedependent": bedependent}, None
+                else:
+                    logger.error("Failed to get dependent、bedependent、down_count for repo: {} \n Error: {}".format(project_url, "Not found"))
+                    return {"down_count": False, "dependent": False, "bedependent": False}, "Not found"
+        return {"down_count": "", "dependent": "", "bedependent": ""}, None
+    except Exception as e:
+        logger.error("parse_oat_txt error: {}".format(e))
+        return {"down_count": "", "dependent": "", "bedependent": ""}, None
+
+
+def criticality_score_checker(project_url: str, res_payload: dict, config: dict) -> None:
+    """
+    Criticality score checker
+    
+    Args:
+        project_url: Project URL
+        res_payload: Response payload
+        config: Configuration dictionary
+    """
+    result, error = run_criticality_score(project_url, config)
+    if error is None:
+        logger.info(f"criticality-score job done: {project_url}")
+        res_payload["scan_results"]["criticality-score"] = result
+    else:
+        logger.error(f"criticality-score job failed: {project_url}, error: {error}")
+        res_payload["scan_results"]["criticality-score"] = {"error": error}
+
+
+def scorecard_score_checker(project_url: str, res_payload: dict) -> None:
+    """
+    Scorecard score checker
+    
+    Args:
+        project_url: Project URL
+        res_payload: Response payload
+    """
+    result, error = run_scorecard_cli(project_url)
+    if error is None:
+        logger.info(f"scorecard-score job done: {project_url}")
+        res_payload["scan_results"]["scorecard-score"] = result
+    else:
+        logger.error(f"scorecard-score job failed: {project_url}, error: {error}")
+        res_payload["scan_results"]["scorecard-score"] = {"error": error}
+
+
+def code_count_checker(project_url: str, res_payload: dict) -> None:
+    """
+    Code count checker
+    
+    Args:
+        project_url: Project URL
+        res_payload: Response payload
+    """
+    result, error = get_code_count(project_url)
+    if error is None:
+        logger.info(f"code-count job done: {project_url}")
+        res_payload["scan_results"]["code-count"] = result
+    else:
+        logger.error(f"code-count job failed: {project_url}, error: {error}")
+        res_payload["scan_results"]["code-count"] = {"error": error}
+
+
+def package_info_checker(project_url: str, res_payload: dict) -> None:
+    """
+    Package info checker
+    
+    Args:
+        project_url: Project URL
+        res_payload: Response payload
+    """
+    result, error = get_package_info(project_url)
+    if error is None:
+        logger.info(f"package-info job done: {project_url}")
+        res_payload["scan_results"]["package-info"] = result
+    else:
+        logger.error(f"package-info job failed: {project_url}, error: {error}")
+        res_payload["scan_results"]["package-info"] = {"error": error}
+
+
+def ohpm_info_checker(project_url: str, res_payload: dict) -> None:
+    """
+    OHPM info checker
+    
+    Args:
+        project_url: Project URL
+        res_payload: Response payload
+    """
+    result, error = get_ohpm_info(project_url)
+    if error is None:
+        logger.info(f"ohpm-info job done: {project_url}")
+        res_payload["scan_results"]["ohpm-info"] = result
+    else:
+        logger.error(f"ohpm-info job failed: {project_url}, error: {error}")
+        res_payload["scan_results"]["ohpm-info"] = {"error": error} 
