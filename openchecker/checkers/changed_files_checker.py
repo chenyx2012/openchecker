@@ -17,7 +17,7 @@ def changed_files_detector(project_url: str, res_payload: dict, commit_hash: str
         commit_hash: Commit hash
     """
     if not commit_hash:
-        logger.error("Fail to get commit hash!")
+        logger.error("changed-files-since-commit-detector job failed: fail to get commit hash!")
         res_payload["scan_results"]["changed-files-since-commit-detector"] = {"error": "No commit hash provided"}
         return
     
