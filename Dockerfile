@@ -4,10 +4,10 @@ WORKDIR /app
 RUN apk update && \
     apk add osv-scanner
 
-FROM maven:3.8.6-openjdk-11-slim As oat_builder
+FROM maven:3.8.6-openjdk-11-slim AS oat_builder
 WORKDIR /app
 # Install oat_tool 
-Run apt update && apt install -y git && \ 
+RUN apt update && apt install -y git && \ 
     git clone https://gitee.com/openharmony-sig/tools_oat.git && \
     cd tools_oat && git checkout tags/v2.0.0 && mvn package
 
