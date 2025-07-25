@@ -80,7 +80,7 @@ RUN cd /opt && wget https://github.com/ossf/scorecard/releases/download/v5.2.1/s
 COPY . .
 RUN chmod a+x scripts/entrypoint.sh && \
     pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt && \
-    pip install --upgrade urllib3 flask-jwt
+    pip install --upgrade urllib3 flask_jwt
 
 # Install criticality
 RUN pip install criticality_score  \
