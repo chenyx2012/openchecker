@@ -81,11 +81,9 @@ COPY . .
 RUN chmod a+x scripts/entrypoint.sh && \
     pip install --upgrade pip && \
     pip install --upgrade urllib3 && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Install criticality
-RUN pip install criticality_score  \
-    && cp -f openchecker/criticality/run.py  /usr/local/lib/python3.9/site-packages/criticality_score/run.py
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install criticality_score && \
+    cp -f openchecker/criticality/run.py  /usr/local/lib/python3.9/site-packages/criticality_score/run.py
 
 
 ENTRYPOINT ["/app/scripts/entrypoint.sh"]
