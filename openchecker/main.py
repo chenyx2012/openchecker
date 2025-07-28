@@ -44,7 +44,7 @@ def auth():
         if not user:
             return {"error": "Invalid credentials"}, 401
         access_token = create_access_token(identity=user.id)
-        return {"access_token": access_token}
+        return {"access_token": access_token, "token_type": "Bearer"}
     # try JSON body
     data = request.get_json()
     if data and 'username' in data and 'password' in data:
@@ -52,7 +52,7 @@ def auth():
         if not user:
             return {"error": "Invalid credentials"}, 401
         access_token = create_access_token(identity=user.id)
-        return {"access_token": access_token}
+        return {"access_token": access_token, "token_type": "Bearer"}
     return {"error": "Missing credentials"}, 401
 
 config = read_config('config/config.ini', "RabbitMQ")
