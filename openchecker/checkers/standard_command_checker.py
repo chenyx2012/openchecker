@@ -390,50 +390,51 @@ def repo_country_organizations_checker(project_url: str, res_payload: dict) -> N
         project_url: Project URL
         res_payload: Response payload
     """ 
+    res_payload["scan_results"]["repo-country-organizations"] = {}
     result_issue_country, error_issue_country = get_type_countries(project_url, 'issue_creators')
     if error_issue_country is None:
         logger.info(f"issue_country job done: {project_url}")
-        res_payload["scan_results"]["issue_creators_country"] = result_issue_country
+        res_payload["scan_results"]["repo-country-organizations"]["issue_creators_country"] = result_issue_country
     else:
         logger.error(f"issue_country job failed: {project_url}, error: {error_issue_country}")
-        res_payload["scan_results"]["issue_creators_country"] = {"error": error_issue_country}
+        res_payload["scan_results"]["repo-country-organizations"]["issue_creators_country"] = {"error": error_issue_country}
 
     result_issue_org, error_issue_org = get_type_organizations(project_url, 'issue_creators')
     if error_issue_org is None:
         logger.info(f"issue_organizations job done: {project_url}")
-        res_payload["scan_results"]["issue_creators_organizations"] = result_issue_org
+        res_payload["scan_results"]["repo-country-organizations"]["issue_creators_organizations"] = result_issue_org
     else:
         logger.error(f"issue_organizations job failed: {project_url}, error: {error_issue_org}")
-        res_payload["scan_results"]["issue_creators_organizations"] = {"error": error_issue_org}
+        res_payload["scan_results"]["repo-country-organizations"]["issue_creators_organizations"] = {"error": error_issue_org}
 
     result_pr_country, error_pr_country = get_type_countries(project_url, 'pull_request_creators')
     if error_pr_country is None:
         logger.info(f"pull_request_country job done: {project_url}")
-        res_payload["scan_results"]["pull_request_creators_country"] = result_pr_country
+        res_payload["scan_results"]["repo-country-organizations"]["pull_request_creators_country"] = result_pr_country
     else:
         logger.error(f"pull_request_country job failed: {project_url}, error: {error_pr_country}")
-        res_payload["scan_results"]["pull_request_creators_country"] = {"error": error_pr_country}
+        res_payload["scan_results"]["repo-country-organizations"]["pull_request_creators_country"] = {"error": error_pr_country}
 
     result_pr_org, error_pr_org = get_type_organizations(project_url, 'pull_request_creators')
     if error_pr_org is None:
         logger.info(f"pull_request_organizations job done: {project_url}")
-        res_payload["scan_results"]["pull_request_creators_organizations"] = result_pr_org
+        res_payload["scan_results"]["repo-country-organizations"]["pull_request_creators_organizations"] = result_pr_org
     else:
         logger.error(f"pull_request_organizations job failed: {project_url}, error: {error_pr_org}")
-        res_payload["scan_results"]["pull_request_creators_organizations"] = {"error": error_pr_org}
+        res_payload["scan_results"]["repo-country-organizations"]["pull_request_creators_organizations"] = {"error": error_pr_org}
     
     result_repo_country, error_repo_country = get_type_countries(project_url, 'stargazers')
     if error_repo_country is None:
         logger.info(f"stargazers_country job done: {project_url}")
-        res_payload["scan_results"]["stargazers_country"] = result_repo_country
+        res_payload["scan_results"]["repo-country-organizations"]["stargazers_country"] = result_repo_country
     else:
         logger.error(f"stargazers_country job failed: {project_url}, error: {error_repo_country}")
-        res_payload["scan_results"]["stargazers_country"] = {"error": error_repo_country}
+        res_payload["scan_results"]["repo-country-organizations"]["stargazers_country"] = {"error": error_repo_country}
 
     result_repo_org, error_repo_org = get_type_organizations(project_url, 'stargazers')
     if error_repo_org is None:
         logger.info(f"stargazers_organizations job done: {project_url}")
-        res_payload["scan_results"]["stargazers_organizations"] = result_repo_org
+        res_payload["scan_results"]["repo-country-organizations"]["stargazers_organizations"] = result_repo_org
     else:
         logger.error(f"stargazers_organizations job failed: {project_url}, error: {error_repo_org}")
-        res_payload["scan_results"]["stargazers_organizations"] = {"error": error_repo_org}
+        res_payload["scan_results"]["repo-country-organizations"]["stargazers_organizations"] = {"error": error_repo_org}
