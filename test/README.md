@@ -374,4 +374,4 @@ def test_performance(benchmark):
 
 如有测试相关问题，请联系：
 - 项目维护者：[Guoqiang QI](guoqiang.qi1@gmail.com)
-- 提交Issue：[GitHub Issues](https://github.com/project/openchecker/issues) 
+- 提交Issue：[GitHub Issues](https://github.com/Laniakea2012/openchecker/issues) 
