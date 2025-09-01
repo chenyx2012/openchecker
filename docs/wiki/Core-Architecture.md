@@ -1,308 +1,283 @@
 # Core Architecture
 
 > **Relevant source files**
-> * [openchecker/agent.py](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py)
-> * [openchecker/message_queue.py](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/message_queue.py)
-> * [scripts/binary_checker.sh](https://github.com/Laniakea2012/openchecker/blob/00a9732e/scripts/binary_checker.sh)
+> * [openchecker/agent.py](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py)
+> * [openchecker/constans.py](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/constans.py)
 
-## Purpose and Scope
+This document describes the fundamental architecture of the OpenChecker system, focusing on the agent-based processing model, message queue integration, and core workflow execution. The architecture centers around asynchronous task processing where agents consume project analysis requests from message queues and execute various security, compliance, and quality checkers.
 
-This document describes the fundamental architecture of the OpenChecker system, focusing on the message-driven design that enables distributed processing of software analysis and compliance checking tasks. The core architecture consists of agent workers that consume analysis requests from RabbitMQ queues and execute various security and compliance checkers on source code repositories.
+For specific platform integrations and external service configurations, see [External Service Configuration](/Laniakea2012/openchecker/5.2-external-service-configuration). For details about specific analysis tools and checkers, see [Analysis Tools and Checkers](/Laniakea2012/openchecker/4-analysis-tools-and-checkers).
 
-For detailed information about specific analysis tools and checkers, see [Analysis Tools and Checkers](/Laniakea2012/openchecker/4-analysis-tools-and-checkers). For API endpoint documentation and authentication mechanisms, see [API and Authentication](/Laniakea2012/openchecker/3-api-and-authentication). For deployment infrastructure details, see [Deployment and Infrastructure](/Laniakea2012/openchecker/6-deployment-and-infrastructure).
+## System Overview
 
-## Message-Driven Architecture Overview
+The OpenChecker core architecture implements a distributed agent-worker pattern where multiple `openchecker-agent` instances process project analysis tasks asynchronously. The system is designed around message-driven processing with robust error handling and automatic retry mechanisms.
 
-OpenChecker follows a message-driven architecture where analysis requests are processed asynchronously through RabbitMQ message queues. The system decouples request handling from task execution, enabling horizontal scaling and fault tolerance.
+### Core Processing Flow
+
+```mermaid
+sequenceDiagram
+  participant RabbitMQ
+  participant opencheck queue
+  participant openchecker-agent
+  participant callback_func
+  participant shell_script_handlers
+  participant Checker Modules
+  participant NFS Storage
+  participant repos_dir
+  participant callback_url
+
+  RabbitMQ->>openchecker-agent: "consume message"
+  openchecker-agent->>NFS Storage: "download project source"
+  openchecker-agent->>shell_script_handlers: "execute shell commands"
+  shell_script_handlers-->>openchecker-agent: "command results"
+  openchecker-agent->>Checker Modules: "execute python checkers"
+  Checker Modules-->>openchecker-agent: "analysis results"
+  openchecker-agent->>NFS Storage: "cleanup project files"
+  openchecker-agent->>callback_url: "POST scan_results"
+  openchecker-agent->>RabbitMQ: "acknowledge message"
+```
+
+Sources: [openchecker/agent.py L197-L298](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py#L197-L298)
+
+## Agent System Architecture
+
+The agent system is built around the `callback_func` function which serves as the main message processor. Each agent instance can handle multiple project analysis tasks concurrently through the message queue system.
+
+### Agent Component Interaction
 
 ```mermaid
 flowchart TD
 
-RMQ["RabbitMQ Broker"]
-OpenCheckQueue["opencheck queue"]
-DeadLetterQueue["dead_letters queue"]
-Agent1["Agent Process 1callback_func"]
-Agent2["Agent Process 2callback_func"]
-Agent3["Agent Process 3callback_func"]
-OSVScanner["osv-scanner command"]
-ScanCode["scancode command"]
-BinaryChecker["binary-checker command"]
-SonarScanner["sonar-scanner command"]
-ORT["dependency-checker command"]
-OAT["oat-scanner command"]
-CallbackURL["Callback URLrequest_url function"]
-SourceRepo["Source RepositoryGit Clone"]
+CallbackFunc["callback_func<br>(agent.py:197)"]
+ConfigReader["read_config<br>(helper module)"]
+Logger["get_logger<br>(logger module)"]
+CommandSwitch["command_switch<br>(agent.py:368-400)"]
+ShellScriptHandler["shell_script_handlers<br>(constans.py:126)"]
+ShellExec["shell_exec<br>(common module)"]
+BinaryChecker["binary_checker"]
+SonarChecker["sonar_checker"]
+ReleaseChecker["release_checker"]
+DocumentChecker["document_checker"]
+StandardChecker["standard_command_checker"]
+DownloadProject["_download_project_source<br>(agent.py:301)"]
+GenerateLock["_generate_lock_files<br>(agent.py:331)"]
+CleanupProject["_cleanup_project_source<br>(agent.py:480)"]
+ProcessResult["_process_command_result<br>(agent.py:448)"]
+SendResults["_send_results<br>(agent.py:500)"]
+PostWithBackoff["post_with_backoff<br>(exponential_backoff)"]
 
-    OpenCheckQueue --> Agent1
-    OpenCheckQueue --> Agent2
-    OpenCheckQueue --> Agent3
-    Agent1 --> OSVScanner
-    Agent1 --> ScanCode
-    Agent2 --> BinaryChecker
-    Agent2 --> SonarScanner
-    Agent3 --> ORT
-    Agent3 --> OAT
-    Agent1 --> SourceRepo
-    Agent2 --> SourceRepo
-    Agent3 --> SourceRepo
-    Agent1 --> CallbackURL
-    Agent2 --> CallbackURL
-    Agent3 --> CallbackURL
-subgraph External_Systems ["External Systems"]
-    CallbackURL
-    SourceRepo
+CallbackFunc --> CommandSwitch
+CommandSwitch --> BinaryChecker
+CommandSwitch --> SonarChecker
+CommandSwitch --> ReleaseChecker
+CommandSwitch --> DocumentChecker
+CommandSwitch --> StandardChecker
+CallbackFunc --> DownloadProject
+CallbackFunc --> GenerateLock
+CallbackFunc --> CleanupProject
+CallbackFunc --> ProcessResult
+CallbackFunc --> SendResults
+
+subgraph subGraph4 ["Result Processing"]
+    ProcessResult
+    SendResults
+    PostWithBackoff
+    SendResults --> PostWithBackoff
 end
 
-subgraph Analysis_Execution ["Analysis Execution"]
-    OSVScanner
-    ScanCode
+subgraph subGraph3 ["Project Management"]
+    DownloadProject
+    GenerateLock
+    CleanupProject
+end
+
+subgraph subGraph2 ["Checker Modules"]
     BinaryChecker
-    SonarScanner
-    ORT
-    OAT
+    SonarChecker
+    ReleaseChecker
+    DocumentChecker
+    StandardChecker
 end
 
-subgraph Agent_Worker_Layer ["Agent Worker Layer"]
-    Agent1
-    Agent2
-    Agent3
+subgraph subGraph1 ["Command Execution"]
+    CommandSwitch
+    ShellScriptHandler
+    ShellExec
+    CommandSwitch --> ShellScriptHandler
+    ShellScriptHandler --> ShellExec
 end
 
-subgraph Message_Queue_Layer ["Message Queue Layer"]
-    RMQ
-    OpenCheckQueue
-    DeadLetterQueue
-    RMQ --> OpenCheckQueue
-    OpenCheckQueue --> DeadLetterQueue
-end
-```
-
-Sources: [openchecker/agent.py L1-L800](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L1-L800)
-
- [openchecker/message_queue.py L1-L206](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/message_queue.py#L1-L206)
-
-## Agent Worker System
-
-The agent worker system is implemented in the `callback_func` function which serves as the main message processor. Each agent worker operates independently and can process multiple types of analysis commands concurrently.
-
-```mermaid
-flowchart TD
-
-MessageReceive["Message Receivedcallback_func:272"]
-ParseMessage["Parse Message Bodyjson.loads:276"]
-ExtractParams["Extract Parameterscommand_list, project_url, callback_url:277-281"]
-CloneRepo["Clone Repositoryshell_exec:294-316"]
-GenerateLocks["Generate Lock Filesnpm install, ohpm install:327-344"]
-Cleanup["Remove Source Codeshell_exec:770-782"]
-CommandLoop["For Each Command:346"]
-OSVCommand["osv-scanner:347-380"]
-ScanCodeCommand["scancode:382-403"]
-BinaryCommand["binary-checker:405-426"]
-SonarCommand["sonar-scanner:454-533"]
-ORTCommand["dependency-checker:535-553"]
-OATCommand["oat-scanner:686-765"]
-AggregateResults["Aggregate Resultsres_payload:285-291"]
-CallbackRequest["Send Callbackrequest_url:784-793"]
-AckMessage["Acknowledge Messagebasic_ack:795"]
-
-    ExtractParams --> CloneRepo
-    GenerateLocks --> CommandLoop
-    OSVCommand --> AggregateResults
-    ScanCodeCommand --> AggregateResults
-    BinaryCommand --> AggregateResults
-    SonarCommand --> AggregateResults
-    ORTCommand --> AggregateResults
-    OATCommand --> AggregateResults
-    CallbackRequest --> Cleanup
-    Cleanup --> AckMessage
-subgraph Result_Processing ["Result Processing"]
-    AggregateResults
-    CallbackRequest
-    AckMessage
-    AggregateResults --> CallbackRequest
-end
-
-subgraph Command_Execution_Loop ["Command Execution Loop"]
-    CommandLoop
-    OSVCommand
-    ScanCodeCommand
-    BinaryCommand
-    SonarCommand
-    ORTCommand
-    OATCommand
-    CommandLoop --> OSVCommand
-    CommandLoop --> ScanCodeCommand
-    CommandLoop --> BinaryCommand
-    CommandLoop --> SonarCommand
-    CommandLoop --> ORTCommand
-    CommandLoop --> OATCommand
-end
-
-subgraph Source_Code_Management ["Source Code Management"]
-    CloneRepo
-    GenerateLocks
-    Cleanup
-    CloneRepo --> GenerateLocks
-end
-
-subgraph Message_Processing_Pipeline ["Message Processing Pipeline"]
-    MessageReceive
-    ParseMessage
-    ExtractParams
-    MessageReceive --> ParseMessage
-    ParseMessage --> ExtractParams
+subgraph subGraph0 ["Agent Core"]
+    CallbackFunc
+    ConfigReader
+    Logger
+    CallbackFunc --> ConfigReader
+    CallbackFunc --> Logger
 end
 ```
 
-Sources: [openchecker/agent.py L272-L795](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L272-L795)
+Sources: [openchecker/agent.py L197-L298](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py#L197-L298)
 
-## Message Processing Flow
+ [openchecker/agent.py L368-L400](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py#L368-L400)
 
-Messages contain essential metadata for task execution and are structured with specific fields that drive the analysis workflow.
+ [openchecker/constans.py L126-L139](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/constans.py#L126-L139)
 
-### Message Structure
+## Command Processing Framework
 
-Each message processed by the `callback_func` contains the following key components:
+The system implements a flexible command routing mechanism that supports both shell script-based tools and Python-based checker modules. Commands are executed based on a dispatch table that maps command names to their respective handlers.
 
-| Field | Description | Line Reference |
+### Command Types and Handlers
+
+| Command Category | Handler Type | Examples |
 | --- | --- | --- |
-| `command_list` | Array of analysis commands to execute | [openchecker/agent.py <br> 277](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L277-L277) |
-| `project_url` | Git repository URL for source code | [openchecker/agent.py <br> 278](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L278-L278) |
-| `commit_hash` | Specific commit for analysis (optional) | [openchecker/agent.py <br> 279](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L279-L279) |
-| `callback_url` | URL for result delivery | [openchecker/agent.py <br> 280](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L280-L280) |
-| `task_metadata` | Additional task context and parameters | [openchecker/agent.py <br> 281](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L281-L281) |
-
-### Error Handling and Dead Letter Processing
-
-The system implements robust error handling with automatic message routing to dead letter queues when processing fails:
+| Shell Script Commands | `_handle_shell_script_command` | `osv-scanner`, `scancode`, `dependency-checker` |
+| Python Checker Modules | Direct function calls | `binary-checker`, `release-checker`, `sonar-scanner` |
+| Standard Commands | `standard_command_checker` | `criticality-score`, `scorecard-score`, `code-count` |
 
 ```mermaid
 flowchart TD
 
-MessageProcess["Message Processingcallback_func"]
-ErrorCheck["Error Conditionerror != None"]
-DeadLetter["Dead Letter Queuebasic_nack:323"]
-SuccessAck["Success Acknowledgmentbasic_ack:795"]
+CommandList["command_list<br>(from message)"]
+CommandSwitch["command_switch<br>(agent.py:368)"]
+OSVScanner["osv-scanner"]
+Scancode["scancode"]
+DependencyChecker["dependency-checker"]
+LanguagesDetector["languages-detector"]
+OATScanner["oat-scanner"]
+BinaryChecker["binary_checker"]
+ReleaseChecker["release_checker"]
+URLChecker["url_checker"]
+SonarChecker["sonar_checker"]
+ShellScriptHandlers["shell_script_handlers<br>(constans.py:126)"]
+HandleShellScript["_handle_shell_script_command<br>(agent.py:413)"]
+ShellExec["shell_exec"]
 
-    MessageProcess --> ErrorCheck
-    ErrorCheck -->|Processing Failed| DeadLetter
-    ErrorCheck -->|Processing Success| SuccessAck
+CommandSwitch --> OSVScanner
+CommandSwitch --> Scancode
+CommandSwitch --> DependencyChecker
+CommandSwitch --> BinaryChecker
+CommandSwitch --> ReleaseChecker
+CommandSwitch --> URLChecker
+CommandSwitch --> SonarChecker
+OSVScanner --> HandleShellScript
+Scancode --> HandleShellScript
+DependencyChecker --> HandleShellScript
+
+subgraph subGraph3 ["Shell Script Framework"]
+    ShellScriptHandlers
+    HandleShellScript
+    ShellExec
+    HandleShellScript --> ShellScriptHandlers
+    HandleShellScript --> ShellExec
+end
+
+subgraph subGraph2 ["Python Checkers"]
+    BinaryChecker
+    ReleaseChecker
+    URLChecker
+    SonarChecker
+end
+
+subgraph subGraph1 ["Shell Script Commands"]
+    OSVScanner
+    Scancode
+    DependencyChecker
+    LanguagesDetector
+    OATScanner
+end
+
+subgraph subGraph0 ["Command Dispatch"]
+    CommandList
+    CommandSwitch
+    CommandList --> CommandSwitch
+end
 ```
 
-Sources: [openchecker/agent.py L318-L324](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L318-L324)
+Sources: [openchecker/agent.py L368-L400](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py#L368-L400)
 
- [openchecker/agent.py L790-L795](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L790-L795)
+ [openchecker/agent.py L413-L446](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py#L413-L446)
 
-## Queue Management System
+ [openchecker/constans.py L126-L139](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/constans.py#L126-L139)
 
-The message queue management is handled by dedicated functions in the `message_queue.py` module, providing comprehensive queue operations.
+## Project Lifecycle Management
 
-### Core Queue Operations
+Each project analysis follows a standardized lifecycle that ensures proper resource management and consistent processing across different project types.
 
-| Function | Purpose | Parameters |
-| --- | --- | --- |
-| `create_queue` | Initialize queue with arguments | config, queue_name, arguments |
-| `publish_message` | Send message to queue | config, queue_name, message_body |
-| `consumer` | Start message consumption with callback | config, queue_name, callback_func |
-| `check_queue_status` | Get message and consumer counts | config, queue_name |
-| `purge_queue` | Clear all messages from queue | config, queue_name |
-| `delete_queue` | Remove queue entirely | config, queue_name |
-
-### Connection Management and Reliability
-
-The consumer implementation includes sophisticated connection management with heartbeat handling and automatic reconnection:
+### Project Processing Lifecycle
 
 ```mermaid
-flowchart TD
-
-EstablishConn["Establish Connectionpika.BlockingConnection:70"]
-CreateChannel["Create Channelchannel.basic_qos:72"]
-StartHeartbeat["Start Heartbeat Threadheartbeat_sender:75-80"]
-StartConsuming["Start Consumingchannel.start_consuming:84"]
-BrokerError["ConnectionClosedByBrokerException:86"]
-ChannelError["AMQPChannelErrorException:95"]
-GenericError["Generic ExceptionException:104"]
-RetryDelay["Sleep 60stime.sleep:92"]
-
-    StartConsuming --> BrokerError
-    StartConsuming --> ChannelError
-    StartConsuming --> GenericError
-    RetryDelay --> EstablishConn
-subgraph Error_Recovery ["Error Recovery"]
-    BrokerError
-    ChannelError
-    GenericError
-    RetryDelay
-    BrokerError --> RetryDelay
-    ChannelError --> RetryDelay
-    GenericError --> RetryDelay
-end
-
-subgraph Connection_Lifecycle ["Connection Lifecycle"]
-    EstablishConn
-    CreateChannel
-    StartHeartbeat
-    StartConsuming
-    EstablishConn --> CreateChannel
-    CreateChannel --> StartHeartbeat
-    StartHeartbeat --> StartConsuming
-end
+stateDiagram-v2
+    [*] --> MessageReceived : "callback_func triggered"
+    MessageReceived --> ValidateInput : "parse message body"
+    ValidateInput --> DownloadSource : "_download_project_source"
+    DownloadSource --> GenerateLockFiles : "_generate_lock_files"
+    GenerateLockFiles --> ExecuteCommands : "_execute_commands"
+    ExecuteCommands --> ProcessResults : "_process_command_result"
+    ProcessResults --> CleanupFiles : "_cleanup_project_source"
+    CleanupFiles --> SendCallback : "_send_results"
+    SendCallback --> AckMessage : "ch.basic_ack"
+    AckMessage --> [*] : "Task Complete"
+    ValidateInput --> ErrorHandling : "download failed"
+    DownloadSource --> ErrorHandling : "download failed"
+    ExecuteCommands --> ErrorHandling : "command failed"
+    SendCallback --> ErrorHandling : "callback failed"
+    ErrorHandling --> NackMessage : "_handle_error_and_nack"
+    NackMessage --> [*] : "Task Failed"
 ```
 
-Sources: [openchecker/message_queue.py L43-L120](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/message_queue.py#L43-L120)
+Sources: [openchecker/agent.py L197-L298](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py#L197-L298)
 
-## Analysis Tool Integration
+ [openchecker/agent.py L301-L329](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py#L301-L329)
 
-Each analysis command in the `callback_func` follows a consistent pattern for tool execution and result collection. Tools are integrated through shell script execution using the `shell_exec` helper function.
+ [openchecker/agent.py L331-L348](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py#L331-L348)
 
-### Shell Execution Framework
+## Shell Script Execution Framework
 
-The `shell_exec` function provides a standardized interface for executing analysis tools:
+The system includes a comprehensive shell script framework for executing external analysis tools. Scripts are templated and dynamically populated with project-specific parameters.
 
-```
-def shell_exec(shell_script, param=None):
-    if param != None:
-        process = subprocess.Popen(["/bin/bash", "-c", shell_script + " " + param], 
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
-    else:
-        process = subprocess.Popen([shell_script], 
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-```
+### Shell Script Template System
 
-Sources: [openchecker/agent.py L91-L101](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L91-L101)
+The `shell_script_handlers` dictionary in `constans.py` provides templated shell scripts for various analysis tools. Each script follows a consistent pattern:
 
-### Command Execution Pattern
+1. **Project Name Extraction**: `_get_project_name()` extracts the project name from the URL
+2. **Repository Cloning**: `_clone_project()` handles git cloning with optional depth limiting
+3. **Tool Execution**: Tool-specific commands with standardized output handling
+4. **Cleanup**: Removal of temporary files and directories
 
-Each analysis tool follows this standard execution pattern:
+Example shell script structure for OSV scanner:
 
-1. **Repository Preparation**: Clone source code if not present
-2. **Tool Execution**: Run specific analysis command via shell script
-3. **Result Processing**: Parse tool output and format for callback
-4. **Error Handling**: Log errors and include in result payload
+```markdown
+# Project name extraction
+project_name=$(basename {project_url} | sed 's/\.git$//')
 
-For example, the `binary-checker` command demonstrates this pattern:
+# Clone repository with depth=1
+if [ ! -e "$project_name" ]; then
+    GIT_ASKPASS=/bin/true git clone --depth=1 {project_url}
+fi
 
-* Executes `./scripts/binary_checker.sh` with project URL parameter
-* Processes output to identify binary files and archives
-* Formats results into structured data for callback
-
-Sources: [openchecker/agent.py L405-L426](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L405-L426)
-
- [scripts/binary_checker.sh L1-L93](https://github.com/Laniakea2012/openchecker/blob/00a9732e/scripts/binary_checker.sh#L1-L93)
-
-### Result Aggregation
-
-All analysis results are collected in the `res_payload` structure, which maintains a consistent format across all tools:
-
-```
-res_payload = {
-    "command_list": command_list,
-    "project_url": project_url,
-    "task_metadata": task_metadata,
-    "scan_results": {
-        # Tool-specific results added here
-    }
-}
+# Execute OSV scanner
+osv-scanner --format json -r $project_name > $project_name/result.json
+cat $project_name/result.json
 ```
 
-Sources: [openchecker/agent.py L285-L291](https://github.com/Laniakea2012/openchecker/blob/00a9732e/openchecker/agent.py#L285-L291)
+Sources: [openchecker/constans.py L1-L139](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/constans.py#L1-L139)
+
+## Error Handling and Reliability
+
+The architecture incorporates multiple layers of error handling and reliability mechanisms:
+
+### Error Handling Strategy
+
+* **Message Acknowledgment**: Successful tasks are acknowledged (`ch.basic_ack`), failed tasks are negative acknowledged (`ch.basic_nack`)
+* **Dead Letter Queue**: Failed messages are routed to dead letter queue for manual inspection
+* **Exponential Backoff**: HTTP callbacks use exponential backoff retry mechanism via `post_with_backoff`
+* **Working Directory Management**: Ensures proper cleanup and restoration of working directory state
+* **Resource Cleanup**: Automatic cleanup of downloaded project files regardless of task outcome
+
+For detailed information about specific reliability mechanisms, see [Reliability and Error Handling](/Laniakea2012/openchecker/2.4-reliability-and-error-handling). For message queue integration details, see [Message Queue Integration](/Laniakea2012/openchecker/2.2-message-queue-integration).
+
+Sources: [openchecker/agent.py L519-L531](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py#L519-L531)
+
+ [openchecker/agent.py L177-L194](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py#L177-L194)
+
+ [openchecker/agent.py L289-L298](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/agent.py#L289-L298)

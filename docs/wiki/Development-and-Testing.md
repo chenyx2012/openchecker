@@ -1,327 +1,260 @@
 # Development and Testing
 
 > **Relevant source files**
-> * [test/test.py](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test.py)
-> * [test/test_token_operator.py](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_token_operator.py)
-> * [test/test_user_manager.py](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_user_manager.py)
+> * [test/test_registry.py](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/test/test_registry.py)
+> * [test/test_user_manager.py](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/test/test_user_manager.py)
 
-This document provides guidance for developers working on the OpenChecker system, covering development environment setup, testing frameworks, and development workflows. It focuses on the technical aspects of contributing to the codebase and ensuring code quality through comprehensive testing.
+This document covers development workflows, testing frameworks, and system integration patterns for the OpenChecker platform. It focuses on the testing infrastructure, database integration patterns, and agent registry management that support the development lifecycle.
 
-For information about deploying OpenChecker in production environments, see [Deployment and Infrastructure](/Laniakea2012/openchecker/6-deployment-and-infrastructure). For details about the overall system architecture, see [Core Architecture](/Laniakea2012/openchecker/2-core-architecture).
+For detailed information about agent registration and management interfaces, see [Agent Registry and Management](/Laniakea2012/openchecker/8.1-agent-registry-and-management). For database integration patterns and Elasticsearch operations, see [Database Integration](/Laniakea2012/openchecker/8.2-database-integration).
 
 ## Development Environment Overview
 
-OpenChecker uses a comprehensive testing strategy built around Python's `unittest` framework, with both unit tests for individual components and integration tests for end-to-end API workflows. The development environment supports local testing of core functionality while maintaining compatibility with the containerized production deployment.
+OpenChecker employs a microservices development architecture with extensive testing coverage and database integration patterns. The development environment supports both local development and distributed deployment scenarios through standardized testing frameworks and data access patterns.
 
-```mermaid
-flowchart TD
+The core development infrastructure consists of:
 
-LocalPython["Local Python EnvironmentPython 3.x + Dependencies"]
-IDE["Development IDEVS Code / PyCharm"]
-Git["Git RepositoryVersion Control"]
-UnitTests["Unit Test Suiteunittest framework"]
-IntegrationTests["Integration TestsHTTP API Testing"]
-TestRunner["Test Runnerpython -m unittest"]
-TokenTests["test_token_operator.pyJWT Token Tests"]
-UserTests["test_user_manager.pyUser Management Tests"]
-APITests["test.pyAPI Integration Tests"]
-TokenOperator["token_operator.pycreateTokenForUser, validate_jwt"]
-UserManager["user_manager.pyUser, createUser, authenticate"]
-FlaskAPI["Flask APIAuth Endpoints"]
-
-    LocalPython --> UnitTests
-    LocalPython --> IntegrationTests
-    IDE --> TestRunner
-    Git --> TestRunner
-    UnitTests --> TokenTests
-    UnitTests --> UserTests
-    IntegrationTests --> APITests
-    TokenTests --> TokenOperator
-    UserTests --> UserManager
-    APITests --> FlaskAPI
-subgraph Core_Components_Under_Test ["Core Components Under Test"]
-    TokenOperator
-    UserManager
-    FlaskAPI
-end
-
-subgraph Test_Files ["Test Files"]
-    TokenTests
-    UserTests
-    APITests
-end
-
-subgraph Testing_Framework ["Testing Framework"]
-    UnitTests
-    IntegrationTests
-    TestRunner
-end
-
-subgraph Development_Environment ["Development Environment"]
-    LocalPython
-    IDE
-    Git
-end
-```
-
-Sources: [test/test_token_operator.py L1-L47](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_token_operator.py#L1-L47)
-
- [test/test_user_manager.py L1-L42](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_user_manager.py#L1-L42)
-
- [test/test.py L1-L43](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test.py#L1-L43)
+* Python `unittest` framework for component testing
+* Elasticsearch integration for repository analytics and data storage
+* Agent registry system for distributed worker management
+* Database abstraction layers with scroll-based pagination
+* Error handling and retry patterns for external service integration
 
 ## Testing Framework Architecture
 
-The testing system is organized into distinct layers, each targeting specific functionality within the OpenChecker system. The framework uses Python's built-in `unittest` module and follows standard testing patterns.
+**Development and Testing Architecture**
 
 ```mermaid
 flowchart TD
 
-TestRunner["unittest.main()"]
-TestDiscovery["Test Discoverytest_*.py patterns"]
-TestExecution["Test ExecutionsetUp -> test_* -> tearDown"]
-TestJWTFunctions["TestJWTFunctionstest_token_operator.py"]
-JWTMethods["test_createTokenForUser()test_validate_jwt_valid_token()test_validate_jwt_invalid_token()"]
-TestUserFunctions["TestUserFunctionstest_user_manager.py"]
-UserMethods["test_createUser()test_indexUserWithID()test_indexUserWithName()test_authenticate()test_identity()"]
-APITest["API Integration Testtest.py"]
-HTTPFlow["Auth Request -> Token -> Protected Endpoint"]
+unittest_main["unittest.main()"]
+TestAgentRegistry["TestAgentRegistry"]
+TestUserFunctions["TestUserFunctions"]
+AgentRegistry_class["register.py::AgentRegistry"]
+user_manager_funcs["user_manager.py::User<br>createUser<br>authenticate<br>identity"]
+elasticsearch_client["repo.py::get_elasticsearch_client<br>get_generator<br>check_repo_china"]
+elasticsearch_conn["Elasticsearch"]
+scroll_pagination["Scroll-based Pagination"]
+error_handling["too_many_scrolls Error Handling"]
+agent_registration["Agent Registration"]
+status_tracking["Status Tracking"]
+agent_lifecycle["Agent Lifecycle"]
 
-    TestDiscovery --> TestJWTFunctions
-    TestDiscovery --> TestUserFunctions
-    TestDiscovery --> APITest
-    TestExecution --> JWTMethods
-    TestExecution --> UserMethods
-    TestExecution --> HTTPFlow
-subgraph Integration_Tests ["Integration Tests"]
-    APITest
-    HTTPFlow
+TestAgentRegistry --> AgentRegistry_class
+TestUserFunctions --> user_manager_funcs
+AgentRegistry_class --> agent_registration
+AgentRegistry_class --> status_tracking
+AgentRegistry_class --> agent_lifecycle
+elasticsearch_client --> elasticsearch_conn
+elasticsearch_client --> scroll_pagination
+elasticsearch_client --> error_handling
+
+subgraph agent_management ["Agent Management"]
+    agent_registration
+    status_tracking
+    agent_lifecycle
 end
 
-subgraph User_Management_Tests ["User Management Tests"]
+subgraph database_layer ["Database Integration"]
+    elasticsearch_conn
+    scroll_pagination
+    error_handling
+end
+
+subgraph target_systems ["Target Systems"]
+    AgentRegistry_class
+    user_manager_funcs
+    elasticsearch_client
+end
+
+subgraph testing_layer ["Testing Layer"]
+    unittest_main
+    TestAgentRegistry
     TestUserFunctions
-    UserMethods
-end
-
-subgraph Authentication_Tests ["Authentication Tests"]
-    TestJWTFunctions
-    JWTMethods
-end
-
-subgraph Test_Execution_Flow ["Test Execution Flow"]
-    TestRunner
-    TestDiscovery
-    TestExecution
-    TestRunner --> TestDiscovery
+    unittest_main --> TestAgentRegistry
+    unittest_main --> TestUserFunctions
 end
 ```
 
-Sources: [test/test_token_operator.py L6-L47](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_token_operator.py#L6-L47)
+The development architecture integrates testing frameworks with core system components, providing comprehensive coverage for agent management, user authentication, and database operations through standardized testing patterns.
 
- [test/test_user_manager.py L6-L42](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_user_manager.py#L6-L42)
+**Sources:** [test/test_registry.py L1-L45](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/test/test_registry.py#L1-L45)
 
- [test/test.py L9-L43](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test.py#L9-L43)
+ [test/test_user_manager.py L1-L42](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/test/test_user_manager.py#L1-L42)
+
+ [openchecker/database/repo.py L1-L204](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/database/repo.py#L1-L204)
 
 ## Unit Testing Components
 
-### JWT Token Testing
+### Agent Registry Testing
 
-The JWT token functionality is tested through the `TestJWTFunctions` class, which validates token creation and validation mechanisms used for API authentication.
+The `TestAgentRegistry` class provides comprehensive testing for the agent registration and management system. It validates the core functionality of agent lifecycle management:
 
 | Test Method | Purpose | Key Assertions |
 | --- | --- | --- |
-| `test_createTokenForUser` | Validates token creation for user authentication | Token contains correct `user_id`, `user_name`, and `expir` fields |
-| `test_validate_jwt_valid_token` | Ensures valid tokens pass validation | Returns `True` for properly formatted tokens |
-| `test_validate_jwt_invalid_token` | Ensures invalid tokens are rejected | Returns `False` for malformed tokens |
+| `test_register_agent()` | Validates agent registration | Agent exists in registry, correct info and status |
+| `test_update_status()` | Tests status updates | Status correctly updated to "busy" |
+| `test_get_agents()` | Verifies agent retrieval | Agent present in returned dictionary |
+| `test_get_agent_info()` | Tests info retrieval | Correct agent description returned |
+| `test_get_agent_status()` | Validates status queries | Status correctly returned as "active" |
+| `test_remove_agent()` | Tests agent removal | Agent no longer present after removal |
 
-The tests use a mock user class and test secret key for isolation from production configuration. Critical functions tested include:
+The test setup uses a clean `AgentRegistry` instance for each test method via the `setUp()` method at [test/test_registry.py L7-L8](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/test/test_registry.py#L7-L8)
 
-* `createTokenForUser(user_id)` - Token generation function
-* `validate_jwt(token)` - Token validation function
-
-Sources: [test/test_token_operator.py L4-L47](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_token_operator.py#L4-L47)
+**Sources:** [test/test_registry.py L5-L43](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/test/test_registry.py#L5-L43)
 
 ### User Management Testing
 
-The `TestUserFunctions` class provides comprehensive testing for user operations, including user creation, lookup, and authentication workflows.
+The `TestUserFunctions` class validates user authentication and management through systematic testing of JWT-based workflows. The test implementation uses UUID-based user identification with `uuid.uuid5()` and `uuid.NAMESPACE_DNS` for consistent test data generation.
 
-```mermaid
-flowchart TD
-
-SetUp["setUp() methodCreates test user and lookup tables"]
-MockConfig["Test Configurationdefault_username: testuserdefault_password: testpassword"]
-TestUser["Test User ObjectUUID-based ID generation"]
-CreateTest["test_createUser()Tests user creation"]
-IndexIDTest["test_indexUserWithID()Tests user lookup by ID"]
-IndexNameTest["test_indexUserWithName()Tests user lookup by name"]
-AuthTest["test_authenticate()Tests credential validation"]
-IdentityTest["test_identity()Tests payload-based lookup"]
-CreateUser["createUser(name, password, access)"]
-IndexUserWithID["indexUserWithID(user_id)"]
-IndexUserWithName["indexUserWithName(username)"]
-Authenticate["authenticate(username, password)"]
-Identity["identity(payload)"]
-
-    CreateTest --> CreateUser
-    IndexIDTest --> IndexUserWithID
-    IndexNameTest --> IndexUserWithName
-    AuthTest --> Authenticate
-    IdentityTest --> Identity
-subgraph Core_Functions ["Core Functions"]
-    CreateUser
-    IndexUserWithID
-    IndexUserWithName
-    Authenticate
-    Identity
-end
-
-subgraph User_Operations_Tests ["User Operations Tests"]
-    IndexNameTest
-    AuthTest
-    IdentityTest
-end
-
-subgraph User_Test_Setup ["User Test Setup"]
-    SetUp
-    MockConfig
-    TestUser
-    CreateTest
-    IndexIDTest
-    SetUp --> MockConfig
-    SetUp --> TestUser
-end
-```
-
-Sources: [test/test_user_manager.py L4-L42](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_user_manager.py#L4-L42)
-
-## Integration Testing
-
-### API Integration Test Workflow
-
-The integration test in `test.py` validates the complete authentication and API access workflow, demonstrating the end-to-end functionality of the OpenChecker API.
-
-| Test Phase | HTTP Method | Endpoint | Purpose |
-| --- | --- | --- | --- |
-| Authentication | POST | `/auth` | Obtain JWT access token |
-| Protected Request | POST | `/test` | Validate token-protected endpoint access |
-
-The test workflow follows this sequence:
-
-1. **Authentication Request**: Posts credentials to `/auth` endpoint
-2. **Token Extraction**: Extracts `access_token` from response JSON
-3. **Protected Request**: Uses token in `Authorization: JWT <token>` header
-4. **Response Validation**: Verifies successful access to protected endpoint
-
-```
-# Key request patterns from test.py
-authPayload = {
-    'username': 'temporary_user',
-    'password': 'default_password'
-}
-
-headers['Authorization'] = 'JWT' + ' ' + access_token
-```
-
-Sources: [test/test.py L10-L43](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test.py#L10-L43)
-
-## Development Workflow
-
-### Local Development Setup
-
-For local development, developers need to set up the Python environment and dependencies required for testing and development.
-
-```mermaid
-flowchart TD
-
-Start["Start Development"]
-Clone["git clone repository"]
-Venv["python -m venv venvsource venv/bin/activate"]
-Install["pip install -r requirements.txt"]
-UnitTest["python -m unittest test.test_token_operatorpython -m unittest test.test_user_manager"]
-IntegrationTest["python test/test.py(requires running API server)"]
-AllTests["python -m unittest discover test/"]
-LocalAPI["python main.pyor flask run"]
-LocalPort["Unsupported markdown: link"]
-
-    Start --> Clone
-    Clone --> Venv
-    Venv --> Install
-
-    Install --> UnitTest
-    Install --> LocalAPI
-    LocalPort --> IntegrationTest
-subgraph Development_Server ["Development Server"]
-    LocalAPI
-    LocalPort
-    LocalAPI --> LocalPort
-end
-
-subgraph Testing_Workflow ["Testing Workflow"]
-    UnitTest
-    IntegrationTest
-    AllTests
-end
-```
-
-Sources: [test/test.py
-
-3](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test.py#L3-L3)
-
-### Test Execution Commands
-
-| Test Type | Command | Description |
+| Test Method | Validation Target | Key Implementation |
 | --- | --- | --- |
-| All Unit Tests | `python -m unittest discover test/` | Runs all test files matching `test_*.py` pattern |
-| Token Tests | `python -m unittest test.test_token_operator` | Tests JWT token functionality only |
-| User Tests | `python -m unittest test.test_user_manager` | Tests user management functionality only |
-| Integration Test | `python test/test.py` | Requires running API server on localhost:8080 |
+| `test_createUser()` | User creation workflow | Validates user added to `userList` |
+| `test_indexUserWithID()` | ID-based lookup | Tests `indexUserWithID()` function |
+| `test_indexUserWithName()` | Name-based lookup | Tests `indexUserWithName()` function |
+| `test_authenticate()` | Password verification | Uses `secrets.compare_digest` |
+| `test_identity()` | JWT payload parsing | Validates `identity()` with payload structure |
 
-### Test Configuration Requirements
+The test setup at [test/test_user_manager.py L8-L15](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/test/test_user_manager.py#L8-L15)
 
-The tests require specific configuration setup for proper execution:
+ creates dual indexing structures (`usernameTable` and `useridTable`) to support both lookup mechanisms used in the authentication system.
 
-* **Secret Keys**: Test files use hardcoded test secrets (noted as requiring optimization)
-* **Default Credentials**: Integration tests use `temporary_user` / `default_password`
-* **Local Server**: Integration tests expect API server running on `localhost:8080`
-* **Dependencies**: Tests require `jwt`, `requests`, `uuid`, and `secrets` modules
+**Sources:** [test/test_user_manager.py L6-L42](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/test/test_user_manager.py#L6-L42)
 
-Sources: [test/test_token_operator.py L9-L11](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_token_operator.py#L9-L11)
+## Database Integration and Data Access Patterns
 
- [test/test_user_manager.py L8-L15](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_user_manager.py#L8-L15)
+### Elasticsearch Client Architecture
 
- [test/test.py L3-L14](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test.py#L3-L14)
+The `repo.py` module provides the core database integration layer through Elasticsearch, implementing robust connection management and error handling patterns for repository analytics.
 
-## Testing Best Practices
+**Elasticsearch Integration Architecture**
 
-### Mock Objects and Test Isolation
+```mermaid
+flowchart TD
 
-The test suite demonstrates proper use of mock objects to isolate functionality under test:
+check_repo_china["check_repo_china(client, repo)"]
+repo_tz_index["github_event_repository_enrich"]
+repo_tz_body["timezone query body"]
+get_elasticsearch_client["get_elasticsearch_client(elastic_url)"]
+get_client["get_client(url)"]
+global_client["global client"]
+get_generator["get_generator(client, body, index)"]
+get_items["get_items(client, index, body, size)"]
+free_scroll["free_scroll(client, scroll_id)"]
+too_many_scrolls["too_many_scrolls(res)"]
+scroll_wait["scroll_wait = 900 seconds"]
+retry_logic["Retry Logic with Timeout"]
 
+get_items --> too_many_scrolls
+
+subgraph error_handling ["Error Handling"]
+    too_many_scrolls
+    scroll_wait
+    retry_logic
+    too_many_scrolls --> scroll_wait
+    scroll_wait --> retry_logic
+end
+
+subgraph pagination_system ["Scroll-based Pagination"]
+    get_generator
+    get_items
+    free_scroll
+    get_generator --> get_items
+    get_generator --> free_scroll
+end
+
+subgraph repository_queries ["Repository Analysis"]
+    check_repo_china
+    repo_tz_index
+    repo_tz_body
+    check_repo_china --> repo_tz_index
+    check_repo_china --> repo_tz_body
+end
+
+subgraph client_management ["Client Management"]
+    get_elasticsearch_client
+    get_client
+    global_client
+    get_client --> get_elasticsearch_client
+    get_elasticsearch_client --> global_client
+end
 ```
-# Example from test_token_operator.py
-class MockUser:
-    def __init__(self, id, name):
-        self.id = id
-        self.name = name
+
+The Elasticsearch integration uses `RequestsHttpConnection` with SSL support detection via `urlparse()` and implements comprehensive timeout and retry configurations through `timeout=100` and `max_retries=10` parameters.
+
+**Sources:** [openchecker/database/repo.py L13-L34](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/database/repo.py#L13-L34)
+
+### Scroll-based Pagination and Error Recovery
+
+The `get_generator()` function implements resilient scroll-based pagination with automatic error recovery for large dataset processing:
+
+| Component | Implementation | Error Handling |
+| --- | --- | --- |
+| Scroll Context Management | `scroll_id` tracking and cleanup | `free_scroll()` on completion |
+| Too Many Scrolls Detection | `too_many_scrolls()` response parsing | 15-minute wait with 1-second polling |
+| Pagination Loop | `yield` based generator pattern | Graceful termination on empty results |
+| Connection Resilience | Global client caching | SSL/HTTPS auto-detection |
+
+The error recovery mechanism at [openchecker/database/repo.py L72-L88](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/database/repo.py#L72-L88)
+
+ implements a 900-second wait period with continuous polling to handle Elasticsearch scroll context limits.
+
+**Sources:** [openchecker/database/repo.py L58-L111](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/database/repo.py#L58-L111)
+
+### Repository Analytics Queries
+
+The `check_repo_china()` function demonstrates specialized repository analysis patterns using timezone-based filtering:
+
+```json
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match_phrase": {
+            "tz_detail_list.tz": 8
+          }
+        },
+        {
+          "match_phrase": {
+            "repo.keyword": "repo_url"
+          }
+        }
+      ]
+    }
+  },
+  "size": 1
+}
 ```
+
+This query structure at [openchecker/database/repo.py L114-L132](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/database/repo.py#L114-L132)
+
+ uses `bool.must` clauses to filter repositories by timezone (`tz: 8` for China) and exact repository URL matching through `keyword` fields.
+
+**Sources:** [openchecker/database/repo.py L112-L134](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/openchecker/database/repo.py#L112-L134)
+
+## Testing Workflow
+
+### Test Execution
+
+Tests are executed using Python's standard `unittest` framework. Each test file includes a main block that runs all tests in the file:
+
+* Agent registry tests: `python test/test_registry.py`
+* User management tests: `python test/test_user_manager.py`
 
 ### Test Data Management
 
-Tests use controlled test data to ensure predictable results:
+Test classes use the `setUp()` method to initialize clean test environments. The user management tests create test users with UUID-based identifiers using `uuid.uuid5()` with `uuid.NAMESPACE_DNS` for consistent, reproducible test data.
 
-* UUID-based user ID generation for uniqueness
-* Predefined username/password combinations
-* Isolated test configurations separate from production
+### Assertion Patterns
 
-### Error Handling Testing
+The tests use standard `unittest` assertion methods:
 
-The test suite includes both positive and negative test cases:
+* `assertTrue()` and `assertFalse()` for boolean checks
+* `assertEqual()` for value comparisons
+* `assertIsNotNone()` for null checks
+* `assertIn()` for membership testing
 
-* Valid token validation tests
-* Invalid token rejection tests
-* Successful authentication tests
-* Failed authentication scenarios
+**Sources:** [test/test_registry.py L44-L45](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/test/test_registry.py#L44-L45)
 
-Sources: [test/test_token_operator.py L14-L44](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_token_operator.py#L14-L44)
-
- [test/test_user_manager.py L8-L39](https://github.com/Laniakea2012/openchecker/blob/00a9732e/test/test_user_manager.py#L8-L39)
+ [test/test_user_manager.py L41-L42](https://github.com/Laniakea2012/openchecker/blob/1dbd85d0/test/test_user_manager.py#L41-L42)
