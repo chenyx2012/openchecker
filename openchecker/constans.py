@@ -62,14 +62,14 @@ scancode_shell_script = f"""
 sonar_scanner_shell_script = f"""
     {_get_project_name("{project_url}")}
     {_clone_project("{project_url}", depth=True)}
-    cp -r $project_name ~/ && cd ~
+    cd $project_name
     sonar-scanner \\
         -Dsonar.projectKey={{sonar_project_name}} \\
-        -Dsonar.sources=$project_name \\
+        -Dsonar.sources=. \\
         -Dsonar.host.url=http://{{sonar_host}}:{{sonar_port}} \\
         -Dsonar.token={{sonar_token}} \\
         -Dsonar.exclusions=**/*.java
-    rm -rf $project_name > /dev/null
+    rm -rf .scannerwork/ && cd .. > /dev/null
     """
 
 dependency_checker_shell_script = f"""
