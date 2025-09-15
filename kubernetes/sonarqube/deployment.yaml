@@ -24,37 +24,32 @@ spec:
           privileged: true
       containers:
       - name: sonarqube
-        image: sonarqube:10.6.0-community
+        image: sonarqube:10.7.0-community
         ports:
         - containerPort: 9000
-        env:
-        - name: SONARQUBE_JDBC_USERNAME
-          value: "admin"
-        - name: SONARQUBE_JDBC_PASSWORD
-          value: "admin" 
-        - name: SONARQUBE_JDBC_URL
-          value: "jdbc:postgresql://postgres-service.postgres:5432/postgresdb
-"
         livenessProbe:
           httpGet:
-            path: /sessions/new
+            path: /api/system/status
             port: 9000
-          initialDelaySeconds: 60
-          periodSeconds: 30
+          initialDelaySeconds: 120
+          periodSeconds: 60
+          timeoutSeconds: 30
+          failureThreshold: 5
         readinessProbe:
           httpGet:
-            path: /sessions/new
+            path: /api/system/status
             port: 9000
-          initialDelaySeconds: 60
+          initialDelaySeconds: 120
           periodSeconds: 30
-          failureThreshold: 6
+          timeoutSeconds: 10
+          failureThreshold: 10
         resources:
           limits:
             cpu: 2000m
-            memory: 2048Mi
+            memory: 4096Mi
           requests:
             cpu: 1000m
-            memory: 1024Mi
+            memory: 2048Mi
         volumeMounts:
         - mountPath: /opt/sonarqube/conf
           name: data
@@ -65,7 +60,13 @@ spec:
         - mountPath: /opt/sonarqube/extensions
           name: data
           subPath: extensions
+        - mountPath: /opt/sonarqube/conf/sonar.properties
+          name: sonarqube-config
+          subPath: sonar.properties
       volumes:
       - name: data
         persistentVolumeClaim:
           claimName: sonarqube-pvc
+      - name: sonarqube-config
+        configMap:
+          name: sonarqube-config

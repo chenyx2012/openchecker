@@ -1,0 +1,24 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sonarqube-config
+  namespace: sonarqube
+data:
+  sonar.properties: |
+    # Database configuration
+    sonar.jdbc.username=admin
+    sonar.jdbc.password=admin
+    sonar.jdbc.url=jdbc:postgresql://postgres-service.postgresql:5432/postgresdb
+    
+    # Web server configuration
+    sonar.web.host=0.0.0.0
+    sonar.web.port=9000
+    sonar.web.javaOpts=-Xmx1024m -Xms512m
+    
+    # Compute Engine configuration
+    sonar.ce.javaOpts=-Xmx1024m -Xms512m
+    
+    # Elasticsearch configuration
+    sonar.search.host=127.0.0.1
+    sonar.search.port=9001
+    sonar.search.javaOpts=-Xmx1024m -Xms1024m
