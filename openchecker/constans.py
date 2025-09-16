@@ -63,13 +63,30 @@ sonar_scanner_shell_script = f"""
     {_get_project_name("{project_url}")}
     {_clone_project("{project_url}", depth=True)}
     cd $project_name
+    # Check if sonar_host already contains protocol
+    if [[ "{{sonar_host}}" =~ ^https?:// ]]; then
+        sonar_url="{{sonar_host}}"
+    else
+        # 检查是否为IP地址
+        if [[ "{{sonar_host}}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            # It's an IP address, use http protocol and add port
+            if [ -n "{{sonar_port}}" ] && [ "{{sonar_port}}" != "None" ]; then
+                sonar_url="http://{{sonar_host}}:{{sonar_port}}"
+            else
+                sonar_url="http://{{sonar_host}}"
+            fi
+        else
+            # It's a domain name, use https protocol
+            sonar_url="https://{{sonar_host}}"
+        fi
+    fi
     sonar-scanner \\
         -Dsonar.projectKey={{sonar_project_name}} \\
         -Dsonar.sources=. \\
-        -Dsonar.host.url=http://{{sonar_host}}:{{sonar_port}} \\
+        -Dsonar.host.url=$sonar_url \\
         -Dsonar.token={{sonar_token}} \\
         -Dsonar.exclusions=**/*.java
-    rm -rf .scannerwork/ && cd .. > /dev/null
+    cd ..
     """
 
 dependency_checker_shell_script = f"""
