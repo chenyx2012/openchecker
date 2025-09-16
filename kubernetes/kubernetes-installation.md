@@ -197,7 +197,31 @@ The following parts will be displayed depending on your Helm version.
 
 **Note:**  The default value of the `externalTrafficPolicy` for the Ingress Nginx Controller Service is `Cluster`. Consequently, when using Ingress to proxy services, the IP addresses displayed during the process of forwarding traffic to backend services will all be uniformly replaced with the cluster internal virtual IP, which like `10.244.0.0`. This situation will render the IP-based analysis and restrictions in the backend services ineffective. It is advisable to adjust the solution by changing the `externalTrafficPolicy` value of the Ingress Nginx Controller Service to `Local`.
 
-When the Ingress Nginx Controller is deployed in the form of a `Deployment` and the `externalTrafficPolicy` is set to `Local`, the traffic entry or external access IP must be the IP address of the node where the Ingress Nginx Controller pod resides. This requirement can be fulfilled by deploying the Ingress Nginx Controller as a `DaemonSet`, thereby enabling access through the IP address of any node. 
+When the Ingress Nginx Controller is deployed in the form of a `Deployment` and the `externalTrafficPolicy` is set to `Local`, the traffic entry or external access IP must be the IP address of the node where the Ingress Nginx Controller pod resides. This requirement can be fulfilled by deploying the Ingress Nginx Controller as a `DaemonSet`, thereby enabling access through the IP address of any node.
+
+When Ingress proxies external services, all traffic appears to come from the cluster's internal IP or the hostnetwork IP, which may causing backend rate-limiting issues. Configure real IP forwarding to pass actual client IPs to backend services:
+
+    ```bash
+    # Global Configuration
+    kubectl -n ingress-nginx patch configmap ingress-nginx-controller --patch='
+    data:
+    use-forwarded-headers: "true"
+    compute-full-forwarded-for: "true"
+    '
+    kubectl -n ingress-nginx rollout restart daemonset/ingress-nginx-controller
+    ```
+    
+   or cinfigure with Ingress Annotations
+
+    ```yaml
+    metadata:
+    annotations:
+        nginx.ingress.kubernetes.io/use-forwarded-headers: "true"
+        nginx.ingress.kubernetes.io/proxy-real-ip-cidr: "0.0.0.0/0"
+        nginx.ingress.kubernetes.io/enable-real-ip: "true"
+    ```
+
+This configuration ensures that the `X-Forwarded-For` header contains the real client IP chain, allowing backend services to properly identify and rate-limit individual clients instead of treating all requests as coming from the cluster/hostnetwork IP. 
 
 ## Cert-Manager Install (Optional)
 Cert-manager is an open - source cloud - native certificate management project used to automatically manage and issue TLS certificates from various sources in a Kubernetes cluster. It can issue certificates from a variety of supported sources, including Let’s Encrypt, HashiCorp Vault, Venafi, and private PKI. It ensures that certificates are valid and updated regularly and attempts to renew certificates at an appropriate time before expiration.
