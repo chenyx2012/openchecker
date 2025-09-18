@@ -11,7 +11,7 @@ from platform_adapter import platform_manager
 logger = get_logger('openchecker.checkers.standard_command_checker')
 
 
-def run_criticality_score(project_url: str, config: dict) -> Tuple[Dict, str]:
+def run_criticality_score(project_url: str) -> Tuple[Dict, str]:
     """
     Run criticality score analysis
     
@@ -24,8 +24,6 @@ def run_criticality_score(project_url: str, config: dict) -> Tuple[Dict, str]:
     """
     if "github.com" in project_url:
         cmd = ["criticality_score", "--repo", project_url, "--format", "json"]
-        github_token = config["Github"]["access_key"]
-        os.environ['GITHUB_AUTH_TOKEN'] = github_token
         result = subprocess.run(cmd, capture_output=True, text=True)
         if result.returncode == 0:
             json_str = result.stderr
@@ -155,9 +153,11 @@ def get_package_info(project_url: str) -> Tuple[Dict, str]:
             description = data.get('description', '')
             home_url = data.get('homepage', '')
         version_data = data.get("versions", {})
-        *_, last_version = version_data.items()
-        dependency = last_version[1].get("dependencies", {})
-        dependent_count = len(dependency)
+        dependent_count = 0
+        if version_data != {}:
+            *_, last_version = version_data.items()
+            dependency = last_version[1].get("dependencies", {})
+            dependent_count = len(dependency)
         
         url_down = f"https://api.npmjs.org/downloads/range/last-month/{package_name}"
         response_down = requests.get(url_down)
@@ -334,7 +334,7 @@ def get_eol_info(project_url: str) -> Tuple[Dict, str]:
         logger.error("eol_info error: {}".format(e))
         return {"eol_status": "", "eol_release": "", "eol_time": ""}, None
 
-def criticality_score_checker(project_url: str, res_payload: dict, config: dict) -> None:
+def criticality_score_checker(project_url: str, res_payload: dict) -> None:
     """
     Criticality score checker
     
@@ -343,7 +343,7 @@ def criticality_score_checker(project_url: str, res_payload: dict, config: dict)
         res_payload: Response payload
         config: Configuration dictionary
     """
-    result, error = run_criticality_score(project_url, config)
+    result, error = run_criticality_score(project_url)
     if error is None:
         logger.info(f"criticality-score job done: {project_url}")
         res_payload["scan_results"]["criticality-score"] = result

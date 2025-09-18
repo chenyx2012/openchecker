@@ -72,6 +72,25 @@ project_root = os.path.dirname(file_dir)
 config_file = os.path.join(project_root, "config", "config.ini")
 config = read_config(config_file)
 
+def env_set():
+    """
+    设置环境变量，通过读取config.ini文件对环境变量进行统一管理
+
+    其他位置（例如k8s 中configmap和container.env ）设置的同名变量值会在这里被覆盖
+    """
+    github_token = config["Github"].get("access_key", "")
+    gitee_token = config["Gitee"].get("access_key", "")
+    gitcode_token = config["GitCode"].get("access_key", "")
+    #作用于scocard_score、critiaclity_score、github_api checker
+    os.environ['GITHUB_AUTH_TOKEN'] = github_token
+    #作用于gitee_api checker
+    os.environ['GITEE_AUTH_TOKEN'] = gitee_token
+    #作用于gitcode_api checker
+    os.environ['GITCODE_AUTH_TOKEN'] = gitcode_token
+
+    logger.info(f"已从配置文件config.ini设置环境变量")
+
+env_set()
 
 def get_licenses_name(data: Dict[str, Any]) -> str:
     """
@@ -392,7 +411,7 @@ def _execute_commands(
         'token-permissions-checker': lambda: token_permissions_checker(project_url, res_payload),
         'webhooks-checker': lambda: webhooks_checker(project_url, res_payload, access_token),
         'changed-files-since-commit-detector': lambda: changed_files_detector(project_url, res_payload, commit_hash),
-        'criticality-score': lambda: criticality_score_checker(project_url, res_payload, config),
+        'criticality-score': lambda: criticality_score_checker(project_url, res_payload),
         'scorecard-score': lambda: scorecard_score_checker(project_url, res_payload),
         'code-count': lambda: code_count_checker(project_url, res_payload),
         'package-info': lambda: package_info_checker(project_url, res_payload),
