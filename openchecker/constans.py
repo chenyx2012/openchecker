@@ -157,7 +157,7 @@ TSCONFIG_EOF
     fi
     
     # 检查是否为Python项目
-    if [ -f "requirements.txt" ] || [ -f "setup.py" ] || [ -f "pyproject.toml" ] || [ -f "Pipfile" ]; then
+    if [ -f "requirements.txt" ] || [ -f "requirement.txt" ] || [ -f "setup.py" ] || [ -f "pyproject.toml" ] || [ -f "Pipfile" ] || find . -maxdepth 1 -name "*.py" | head -1 | grep -q "."; then
         echo "Detected Python project"
         project_type="python"
     fi
@@ -235,22 +235,85 @@ EOF
             
             echo "Detected source directories: $source_dirs"
             
+            # 动态检测测试目录
+            test_dirs=""
+            for dir in test tests __tests__ spec e2e cypress; do
+                if [ -d "$dir" ]; then
+                    if [ -z "$test_dirs" ]; then
+                        test_dirs="$dir"
+                    else
+                        test_dirs="$test_dirs,$dir"
+                    fi
+                    echo "发现测试目录: $dir"
+                fi
+            done
+            
+            # 如果没有找到测试目录，使用默认值
+            if [ -z "$test_dirs" ]; then
+                test_dirs="test"
+                echo "未找到测试目录，使用默认值: test"
+            fi
+            
             cat >> sonar-project.properties << EOF
 # Node.js/TypeScript项目配置
 sonar.sources=$source_dirs
-sonar.tests=test
+EOF
+            
+            # 只有找到测试目录才配置
+            if [ "$test_dirs" != "test" ] || [ -d "test" ]; then
+                echo "sonar.tests=$test_dirs" >> sonar-project.properties
+            fi
+            
+            cat >> sonar-project.properties << EOF
 sonar.exclusions=**/node_modules/**,**/dist/**,**/build/**,**/coverage/**,**/*.min.js,**/*.bundle.js,**/*.d.ts,**/public/**,**/static/**,**/.next/**,**/.nuxt/**,**/vendor/**
 
 # 测试文件排除
 sonar.test.exclusions=**/*.test.ts,**/*.test.js,**/*.spec.ts,**/*.spec.js,**/*.test.tsx,**/*.spec.tsx
 
+EOF
+            
+            # 动态检测覆盖率报告
+            lcov_reports=""
+            for file in coverage/lcov.info coverage/lcov-report/lcov.info lcov.info coverage.lcov; do
+                if [ -f "$file" ]; then
+                    if [ -z "$lcov_reports" ]; then
+                        lcov_reports="$file"
+                    else
+                        lcov_reports="$lcov_reports,$file"
+                    fi
+                    echo "发现LCOV覆盖率文件: $file"
+                fi
+            done
+            
+            if [ -z "$lcov_reports" ]; then
+                lcov_reports="coverage/lcov.info,coverage/lcov-report/lcov.info"
+            fi
+            
+            # 动态检测ESLint报告
+            eslint_reports=""
+            for file in eslint-report.json reports/eslint-report.json .eslintcache; do
+                if [ -f "$file" ]; then
+                    if [ -z "$eslint_reports" ]; then
+                        eslint_reports="$file"
+                    else
+                        eslint_reports="$eslint_reports,$file"
+                    fi
+                    echo "发现ESLint报告: $file"
+                fi
+            done
+            
+            if [ -z "$eslint_reports" ]; then
+                eslint_reports="eslint-report.json,reports/eslint-report.json"
+            fi
+            
+            cat >> sonar-project.properties << EOF
 # TypeScript特定配置
 sonar.typescript.node.maxspace={typescript_node_maxspace}
-sonar.typescript.lcov.reportPaths=coverage/lcov.info,coverage/lcov-report/lcov.info
-sonar.javascript.lcov.reportPaths=coverage/lcov.info,coverage/lcov-report/lcov.info
+sonar.typescript.lcov.reportPaths=$lcov_reports
+sonar.javascript.lcov.reportPaths=$lcov_reports
 
 # ESLint配置
-sonar.eslint.reportPaths=eslint-report.json,reports/eslint-report.json
+sonar.eslint.reportPaths=$eslint_reports
 
 # 测试覆盖率配置
 sonar.coverage.exclusions=**/*.test.ts,**/*.test.js,**/*.spec.ts,**/*.spec.js,**/*.test.tsx,**/*.spec.tsx,**/node_modules/**,**/coverage/**,**/*.config.js,**/*.config.ts
@@ -277,20 +340,184 @@ EOF
         "java")
             cat >> sonar-project.properties << EOF
 # Java项目配置
-sonar.sources=src/main/java,src/main/kotlin,src
-sonar.tests=src/test/java,src/test/kotlin,test
-sonar.java.binaries=target/classes,build/classes/java/main,build/classes/kotlin/main
-sonar.java.test.binaries=target/test-classes,build/classes/java/test,build/classes/kotlin/test
-sonar.java.libraries=target/dependency/*.jar,build/libs/*.jar
-sonar.exclusions=**/target/**,**/build/**,**/*.class,**/generated-sources/**
-sonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml,build/reports/jacoco/test/jacocoTestReport.xml
+EOF
+            
+            # 动态检测Java源代码目录
+            java_sources=""
+            java_tests=""
+            
+            # 检查标准Maven/Gradle结构
+            for lang in java kotlin scala; do
+                if [ -d "src/main/$lang" ]; then
+                    if [ -z "$java_sources" ]; then
+                        java_sources="src/main/$lang"
+                    else
+                        java_sources="$java_sources,src/main/$lang"
+                    fi
+                    echo "发现Java源代码目录: src/main/$lang"
+                fi
+                
+                if [ -d "src/test/$lang" ]; then
+                    if [ -z "$java_tests" ]; then
+                        java_tests="src/test/$lang"
+                    else
+                        java_tests="$java_tests,src/test/$lang"
+                    fi
+                    echo "发现Java测试目录: src/test/$lang"
+                fi
+            done
+            
+            # 检查非标准结构
+            for dir in src main java app lib; do
+                if [ -d "$dir" ] && [ "$dir" != "src/main/java" ] && [ "$dir" != "src/main/kotlin" ] && [ "$dir" != "src/main/scala" ]; then
+                    # 检查是否包含Java文件
+                    if find "$dir" -name "*.java" -o -name "*.kt" -o -name "*.scala" | head -1 | grep -q "."; then
+                        if [ -z "$java_sources" ]; then
+                            java_sources="$dir"
+                        else
+                            java_sources="$java_sources,$dir"
+                        fi
+                        echo "发现非标准Java源代码目录: $dir"
+                    fi
+                fi
+            done
+            
+            # 检查根目录的Java文件
+            if find . -maxdepth 1 -name "*.java" -o -name "*.kt" -o -name "*.scala" | head -1 | grep -q "."; then
+                if [ -z "$java_sources" ]; then
+                    java_sources="."
+                else
+                    java_sources="$java_sources,."
+                fi
+                echo "根目录包含Java文件，添加到源代码目录"
+            fi
+            
+            # 检查测试目录
+            for dir in test tests src/test; do
+                if [ -d "$dir" ] && [ "$dir" != "src/test/java" ] && [ "$dir" != "src/test/kotlin" ] && [ "$dir" != "src/test/scala" ]; then
+                    if find "$dir" -name "*.java" -o -name "*.kt" -o -name "*.scala" | head -1 | grep -q "."; then
+                        if [ -z "$java_tests" ]; then
+                            java_tests="$dir"
+                        else
+                            java_tests="$java_tests,$dir"
+                        fi
+                        echo "发现Java测试目录: $dir"
+                    fi
+                fi
+            done
+            
+            # 如果没有找到源代码目录，使用根目录
+            if [ -z "$java_sources" ]; then
+                java_sources="."
+                echo "未找到Java源代码目录，使用根目录"
+            fi
+            
+            cat >> sonar-project.properties << EOF
+sonar.sources=$java_sources
+EOF
+            
+            # 只有找到测试目录才配置
+            if [ -n "$java_tests" ]; then
+                echo "sonar.tests=$java_tests" >> sonar-project.properties
+            fi
+            
+            # 动态检测二进制文件目录
+            java_binaries=""
+            java_test_binaries=""
+            
+            for dir in target/classes build/classes/java/main build/classes/kotlin/main classes out/production; do
+                if [ -d "$dir" ]; then
+                    if [ -z "$java_binaries" ]; then
+                        java_binaries="$dir"
+                    else
+                        java_binaries="$java_binaries,$dir"
+                    fi
+                fi
+            done
+            
+            for dir in target/test-classes build/classes/java/test build/classes/kotlin/test test-classes out/test; do
+                if [ -d "$dir" ]; then
+                    if [ -z "$java_test_binaries" ]; then
+                        java_test_binaries="$dir"
+                    else
+                        java_test_binaries="$java_test_binaries,$dir"
+                    fi
+                fi
+            done
+            
+            cat >> sonar-project.properties << EOF
+EOF
+            
+            # 只有找到二进制目录才配置
+            if [ -n "$java_binaries" ]; then
+                echo "sonar.java.binaries=$java_binaries" >> sonar-project.properties
+            fi
+            
+            if [ -n "$java_test_binaries" ]; then
+                echo "sonar.java.test.binaries=$java_test_binaries" >> sonar-project.properties
+            fi
+            
+            cat >> sonar-project.properties << EOF
+sonar.java.libraries=target/dependency/*.jar,build/libs/*.jar,lib/*.jar,libs/*.jar
+sonar.exclusions=**/target/**,**/build/**,**/*.class,**/generated-sources/**,**/out/**
+sonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml,build/reports/jacoco/test/jacocoTestReport.xml,jacoco.xml
 EOF
             ;;
         "python")
             cat >> sonar-project.properties << EOF
 # Python项目配置
-sonar.sources=src,lib,app,.
-sonar.tests=tests,test
+EOF
+            
+            # 动态检测并配置源代码目录
+            source_dirs=""
+            for dir in src lib app; do
+                if [ -d "$dir" ]; then
+                    if [ -z "$source_dirs" ]; then
+                        source_dirs="$dir"
+                    else
+                        source_dirs="$source_dirs,$dir"
+                    fi
+                    echo "发现源代码目录: $dir"
+                fi
+            done
+            
+            # 如果没有找到标准目录，使用根目录
+            if [ -z "$source_dirs" ]; then
+                source_dirs="."
+                echo "使用根目录作为源代码目录"
+            else
+                # 同时包含根目录（如果有根目录的Python文件）
+                if find . -maxdepth 1 -name "*.py" | head -1 | grep -q "."; then
+                    source_dirs="$source_dirs,."
+                    echo "根目录也包含Python文件，添加到源代码目录"
+                fi
+            fi
+            
+            cat >> sonar-project.properties << EOF
+sonar.sources=$source_dirs
+# 动态检测测试目录
+EOF
+            
+            # 动态检测并配置测试目录
+            test_dirs=""
+            for dir in tests test __tests__ spec; do
+                if [ -d "$dir" ]; then
+                    if [ -z "$test_dirs" ]; then
+                        test_dirs="$dir"
+                    else
+                        test_dirs="$test_dirs,$dir"
+                    fi
+                fi
+            done
+            
+            if [ -n "$test_dirs" ]; then
+                echo "sonar.tests=$test_dirs" >> sonar-project.properties
+                echo "发现测试目录: $test_dirs"
+            else
+                echo "未发现标准测试目录，跳过测试配置"
+            fi
+            
+            cat >> sonar-project.properties << EOF
 sonar.exclusions=**/venv/**,**/env/**,**/.venv/**,**/__pycache__/**,**/build/**,**/dist/**,**/*.pyc,**/migrations/**,**/settings/**
 sonar.test.exclusions=**/test_*.py,**/*_test.py,**/conftest.py
 sonar.python.coverage.reportPaths=coverage.xml,htmlcov/coverage.xml
@@ -302,38 +529,308 @@ EOF
         "go")
             cat >> sonar-project.properties << EOF
 # Go项目配置
-sonar.sources=.
-sonar.tests=.
-sonar.exclusions=**/vendor/**,**/testdata/**,**/*_test.go
+EOF
+            
+            # 动态检测Go源代码目录
+            go_sources=""
+            
+            # 检查标准Go项目结构
+            for dir in cmd pkg internal api src; do
+                if [ -d "$dir" ]; then
+                    # 检查是否包含Go文件
+                    if find "$dir" -name "*.go" | head -1 | grep -q "."; then
+                        if [ -z "$go_sources" ]; then
+                            go_sources="$dir"
+                        else
+                            go_sources="$go_sources,$dir"
+                        fi
+                        echo "发现Go源代码目录: $dir"
+                    fi
+                fi
+            done
+            
+            # 检查根目录的Go文件
+            if find . -maxdepth 1 -name "*.go" | head -1 | grep -q "."; then
+                if [ -z "$go_sources" ]; then
+                    go_sources="."
+                else
+                    go_sources="$go_sources,."
+                fi
+                echo "根目录包含Go文件，添加到源代码目录"
+            fi
+            
+            # 如果没有找到源代码目录，使用根目录
+            if [ -z "$go_sources" ]; then
+                go_sources="."
+                echo "未找到Go源代码目录，使用根目录"
+            fi
+            
+            # 动态检测覆盖率报告路径
+            coverage_paths=""
+            for file in coverage.out cover.out c.out profile.cov; do
+                if [ -f "$file" ]; then
+                    if [ -z "$coverage_paths" ]; then
+                        coverage_paths="$file"
+                    else
+                        coverage_paths="$coverage_paths,$file"
+                    fi
+                    echo "发现Go覆盖率文件: $file"
+                fi
+            done
+            
+            if [ -z "$coverage_paths" ]; then
+                coverage_paths="coverage.out,cover.out"
+            fi
+            
+            cat >> sonar-project.properties << EOF
+sonar.sources=$go_sources
+sonar.tests=$go_sources
+sonar.exclusions=**/vendor/**,**/testdata/**,**/*_test.go,**/node_modules/**
 sonar.test.inclusions=**/*_test.go
-sonar.go.coverage.reportPaths=coverage.out,cover.out
+sonar.go.coverage.reportPaths=$coverage_paths
 EOF
             ;;
         "csharp")
             cat >> sonar-project.properties << EOF
 # C#项目配置
-sonar.sources=.
-sonar.exclusions=**/bin/**,**/obj/**,**/packages/**,**/TestResults/**,**/*.Tests/**
-sonar.cs.dotcover.reportsPaths=dotCover.html
-sonar.cs.opencover.reportsPaths=coverage.xml
-sonar.cs.nunit.reportsPaths=TestResult.xml
+EOF
+            
+            # 动态检测C#源代码目录
+            csharp_sources=""
+            
+            # 检查标准.NET项目结构
+            for dir in src Source Sources Controllers Models Views Services; do
+                if [ -d "$dir" ]; then
+                    # 检查是否包含C#文件
+                    if find "$dir" -name "*.cs" -o -name "*.vb" | head -1 | grep -q "."; then
+                        if [ -z "$csharp_sources" ]; then
+                            csharp_sources="$dir"
+                        else
+                            csharp_sources="$csharp_sources,$dir"
+                        fi
+                        echo "发现C#源代码目录: $dir"
+                    fi
+                fi
+            done
+            
+            # 检查根目录的C#文件
+            if find . -maxdepth 1 -name "*.cs" -o -name "*.vb" | head -1 | grep -q "."; then
+                if [ -z "$csharp_sources" ]; then
+                    csharp_sources="."
+                else
+                    csharp_sources="$csharp_sources,."
+                fi
+                echo "根目录包含C#文件，添加到源代码目录"
+            fi
+            
+            # 如果没有找到源代码目录，使用根目录
+            if [ -z "$csharp_sources" ]; then
+                csharp_sources="."
+                echo "未找到C#源代码目录，使用根目录"
+            fi
+            
+            # 动态检测覆盖率报告
+            coverage_reports=""
+            dotcover_reports=""
+            opencover_reports=""
+            nunit_reports=""
+            
+            # 检查各种覆盖率报告文件
+            for file in dotCover.html dotcover.xml; do
+                if [ -f "$file" ]; then
+                    if [ -z "$dotcover_reports" ]; then
+                        dotcover_reports="$file"
+                    else
+                        dotcover_reports="$dotcover_reports,$file"
+                    fi
+                fi
+            done
+            
+            for file in coverage.xml opencover.xml TestCoverage.xml; do
+                if [ -f "$file" ]; then
+                    if [ -z "$opencover_reports" ]; then
+                        opencover_reports="$file"
+                    else
+                        opencover_reports="$opencover_reports,$file"
+                    fi
+                fi
+            done
+            
+            for file in TestResult.xml TestResults.xml nunit-result.xml; do
+                if [ -f "$file" ]; then
+                    if [ -z "$nunit_reports" ]; then
+                        nunit_reports="$file"
+                    else
+                        nunit_reports="$nunit_reports,$file"
+                    fi
+                fi
+            done
+            
+            cat >> sonar-project.properties << EOF
+sonar.sources=$csharp_sources
+sonar.exclusions=**/bin/**,**/obj/**,**/packages/**,**/TestResults/**,**/*.Tests/**,**/node_modules/**,**/wwwroot/lib/**
+EOF
+            
+            # 只有找到报告文件才配置
+            if [ -n "$dotcover_reports" ]; then
+                echo "sonar.cs.dotcover.reportsPaths=$dotcover_reports" >> sonar-project.properties
+            fi
+            
+            if [ -n "$opencover_reports" ]; then
+                echo "sonar.cs.opencover.reportsPaths=$opencover_reports" >> sonar-project.properties
+            fi
+            
+            if [ -n "$nunit_reports" ]; then
+                echo "sonar.cs.nunit.reportsPaths=$nunit_reports" >> sonar-project.properties
+            fi
+            
+            cat >> sonar-project.properties << EOF
 EOF
             ;;
         "php")
             cat >> sonar-project.properties << EOF
 # PHP项目配置
-sonar.sources=src,lib,app
-sonar.tests=tests,test
-sonar.exclusions=**/vendor/**,**/cache/**,**/storage/**,**/bootstrap/cache/**
-sonar.php.coverage.reportPaths=coverage.xml,clover.xml
-sonar.php.tests.reportPath=phpunit.xml
+EOF
+            
+            # 动态检测PHP源代码目录
+            php_sources=""
+            php_tests=""
+            
+            # 检查标准PHP项目结构
+            for dir in src lib app public www html includes; do
+                if [ -d "$dir" ]; then
+                    # 检查是否包含PHP文件
+                    if find "$dir" -name "*.php" | head -1 | grep -q "."; then
+                        if [ -z "$php_sources" ]; then
+                            php_sources="$dir"
+                        else
+                            php_sources="$php_sources,$dir"
+                        fi
+                        echo "发现PHP源代码目录: $dir"
+                    fi
+                fi
+            done
+            
+            # 检查根目录的PHP文件
+            if find . -maxdepth 1 -name "*.php" | head -1 | grep -q "."; then
+                if [ -z "$php_sources" ]; then
+                    php_sources="."
+                else
+                    php_sources="$php_sources,."
+                fi
+                echo "根目录包含PHP文件，添加到源代码目录"
+            fi
+            
+            # 如果没有找到源代码目录，使用根目录
+            if [ -z "$php_sources" ]; then
+                php_sources="."
+                echo "未找到PHP源代码目录，使用根目录"
+            fi
+            
+            # 检查测试目录
+            for dir in tests test Tests __tests__ spec; do
+                if [ -d "$dir" ]; then
+                    if find "$dir" -name "*.php" | head -1 | grep -q "."; then
+                        if [ -z "$php_tests" ]; then
+                            php_tests="$dir"
+                        else
+                            php_tests="$php_tests,$dir"
+                        fi
+                        echo "发现PHP测试目录: $dir"
+                    fi
+                fi
+            done
+            
+            # 动态检测覆盖率报告
+            coverage_reports=""
+            for file in coverage.xml clover.xml phpunit-coverage.xml; do
+                if [ -f "$file" ]; then
+                    if [ -z "$coverage_reports" ]; then
+                        coverage_reports="$file"
+                    else
+                        coverage_reports="$coverage_reports,$file"
+                    fi
+                    echo "发现PHP覆盖率文件: $file"
+                fi
+            done
+            
+            if [ -z "$coverage_reports" ]; then
+                coverage_reports="coverage.xml,clover.xml"
+            fi
+            
+            # 动态检测测试报告
+            test_reports=""
+            for file in phpunit.xml phpunit-result.xml junit.xml; do
+                if [ -f "$file" ]; then
+                    if [ -z "$test_reports" ]; then
+                        test_reports="$file"
+                    else
+                        test_reports="$test_reports,$file"
+                    fi
+                    echo "发现PHP测试报告: $file"
+                fi
+            done
+            
+            if [ -z "$test_reports" ]; then
+                test_reports="phpunit.xml"
+            fi
+            
+            cat >> sonar-project.properties << EOF
+sonar.sources=$php_sources
+EOF
+            
+            # 只有找到测试目录才配置
+            if [ -n "$php_tests" ]; then
+                echo "sonar.tests=$php_tests" >> sonar-project.properties
+            fi
+            
+            cat >> sonar-project.properties << EOF
+sonar.exclusions=**/vendor/**,**/cache/**,**/storage/**,**/bootstrap/cache/**,**/node_modules/**,**/public/build/**
+sonar.php.coverage.reportPaths=$coverage_reports
+sonar.php.tests.reportPath=$test_reports
 EOF
             ;;
         *)
+            echo "Unknown project type, using enhanced generic configuration"
+            
+            # 智能检测源代码目录
+            generic_sources=""
+            
+            # 检查常见的源代码目录
+            for dir in src source lib app main code; do
+                if [ -d "$dir" ]; then
+                    # 检查是否包含代码文件
+                    if find "$dir" -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.java" -o -name "*.go" -o -name "*.php" -o -name "*.cs" -o -name "*.cpp" -o -name "*.c" -o -name "*.h" | head -1 | grep -q "."; then
+                        if [ -z "$generic_sources" ]; then
+                            generic_sources="$dir"
+                        else
+                            generic_sources="$generic_sources,$dir"
+                        fi
+                        echo "发现通用源代码目录: $dir"
+                    fi
+                fi
+            done
+            
+            # 检查根目录的代码文件
+            if find . -maxdepth 1 -name "*.py" -o -name "*.js" -o -name "*.ts" -o -name "*.java" -o -name "*.go" -o -name "*.php" -o -name "*.cs" -o -name "*.cpp" -o -name "*.c" -o -name "*.h" | head -1 | grep -q "."; then
+                if [ -z "$generic_sources" ]; then
+                    generic_sources="."
+                else
+                    generic_sources="$generic_sources,."
+                fi
+                echo "根目录包含代码文件，添加到源代码目录"
+            fi
+            
+            # 如果没有找到源代码目录，使用根目录
+            if [ -z "$generic_sources" ]; then
+                generic_sources="."
+                echo "未找到源代码目录，使用根目录"
+            fi
+            
             cat >> sonar-project.properties << EOF
 # 通用项目配置
-sonar.sources=src,lib,app,.
-sonar.exclusions=**/node_modules/**,**/venv/**,**/env/**,**/__pycache__/**,**/build/**,**/dist/**,**/target/**,**/vendor/**,**/bin/**,**/obj/**
+sonar.sources=$generic_sources
+sonar.exclusions=**/node_modules/**,**/venv/**,**/env/**,**/__pycache__/**,**/build/**,**/dist/**,**/target/**,**/vendor/**,**/bin/**,**/obj/**,**/coverage/**,**/cache/**
 EOF
             ;;
     esac
