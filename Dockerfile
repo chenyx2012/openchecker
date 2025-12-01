@@ -64,7 +64,8 @@ RUN gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A170311380
     apt-get install -y openjdk-11-jdk && \
     curl -sL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs build-essential sbt ruby-licensee cloc && \
-    npm install -g pnpm yarn bower
+    npm install -g typescript@latest pnpm yarn bower && \
+    node -v && npm -v && tsc -v
 
 # Install ohpm_cli_tool
 RUN cd /opt && git clone --depth=1 https://github.com/Laniakea2012/ohpm_cli_tool.git && \
