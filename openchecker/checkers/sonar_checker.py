@@ -42,7 +42,10 @@ def sonar_checker(project_url: str, res_payload: dict, config: dict) -> None:
             sonar_project_name=sonar_project_name, 
             sonar_host=sonar_config.get('host', 'localhost'),
             sonar_port=sonar_config.get('port', '9000'),
-            sonar_token=sonar_config.get('token', '')
+            sonar_token=sonar_config.get('token', ''),
+            typescript_node_maxspace=sonar_config.get('typescript_node_maxspace', '4096'),
+            default_exclusions=sonar_config.get('default_exclusions', '**/node_modules/**,**/dist/**,**/build/**'),
+            scan_timeout=sonar_config.get('scan_timeout', '600')
         )
         result, error = shell_exec(shell_script)
         
