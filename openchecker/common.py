@@ -3,10 +3,22 @@ from pathlib import Path
 from typing import List, Dict, Tuple, Any
 
 def shell_exec(shell_script, param=None):
-    if param != None:
-        process = subprocess.Popen(["/bin/bash", "-c", shell_script + " " + param], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+    """
+    Execute shell script using bash
+    
+    Args:
+        shell_script: Shell script to execute
+        param: Optional parameter to append to script
+        
+    Returns:
+        Tuple of (stdout, stderr) - stderr is None on success
+    """
+    if param is not None:
+        cmd = ["/bin/bash", "-c", shell_script + " " + param]
     else:
-        process = subprocess.Popen([shell_script], stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        cmd = ["/bin/bash", "-c", shell_script]
+    
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
     shell_output, error = process.communicate()
 
     if process.returncode == 0:

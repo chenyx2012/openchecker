@@ -62,10 +62,21 @@ RUN gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A170311380
     curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | apt-key add && \
     apt-get update && \
     apt-get install -y openjdk-11-jdk && \
+    # Install Maven
+    apt-get install -y maven && \
+    # Install Gradle
+    cd /opt && \
+    wget https://services.gradle.org/distributions/gradle-7.6-bin.zip && \
+    unzip gradle-7.6-bin.zip && \
+    ln -s /opt/gradle-7.6/bin/gradle /usr/bin/gradle && \
+    rm gradle-7.6-bin.zip && \
+    cd /app && \
     curl -sL https://deb.nodesource.com/setup_18.x | bash - && \
     apt-get install -y nodejs build-essential sbt ruby-licensee cloc && \
     npm install -g typescript@latest pnpm yarn bower && \
-    node -v && npm -v && tsc -v
+    node -v && npm -v && tsc -v && \
+    mvn -v && \
+    gradle -v
 
 # Install ohpm_cli_tool
 RUN cd /opt && git clone --depth=1 https://github.com/Laniakea2012/ohpm_cli_tool.git && \
