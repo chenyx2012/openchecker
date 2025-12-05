@@ -132,7 +132,7 @@ sonar_scanner_shell_script = """
         fi
     }}
     
-    # 通用扫描（适用于所有非Maven/Gradle项目）
+    # 通用扫描
     run_general_scan() {{
         echo "开始通用项目扫描..." >&2
         echo "SonarQube URL: $sonar_url" >&2
@@ -144,7 +144,7 @@ sonar_scanner_shell_script = """
             -Dsonar.projectKey="{sonar_project_name}" \\
             -Dsonar.projectName="{sonar_project_name}" \\
             -Dsonar.sources="." \\
-            -Dsonar.exclusions="$EXCLUSIONS" \\
+            -Dsonar.exclusions="$EXCLUSIONS",**/*.java \\
             -Dsonar.scm.disabled=true 2>&1 | tail -n 100 >&2
         
         scan_exit_code=$?
@@ -154,23 +154,11 @@ sonar_scanner_shell_script = """
         handle_scan_result "通用" $scan_exit_code "$sonar_url"
     }}
     
-    # Maven专属扫描
+    # Maven 扫描
     run_maven_scan() {{
         echo "开始Maven项目扫描..." >&2
-        
-        # 先尝试编译项目（不运行测试，加快速度）
-        echo "步骤1: 编译项目..." >&2
-        timeout {scan_timeout} mvn clean compile -DskipTests -Dmaven.test.skip=true 2>&1 | tail -n 50 >&2
-        compile_exit_code=$?
-        
-        if [ $compile_exit_code -ne 0 ]; then
-            echo "Maven编译失败（退出码: $compile_exit_code），尝试使用通用扫描..." >&2
-            run_general_scan
-            return
-        fi
-        
-        echo "步骤2: 执行SonarQube扫描..." >&2
-        timeout {scan_timeout} mvn sonar:sonar \\
+
+        timeout {scan_timeout} mvn clean verify sonar:sonar \\
             -Dsonar.host.url="$sonar_url" \\
             -Dsonar.token="{sonar_token}" \\
             -Dsonar.projectKey="{sonar_project_name}" \\
@@ -181,37 +169,26 @@ sonar_scanner_shell_script = """
         handle_scan_result "Maven" $scan_exit_code "$sonar_url"
     }}
     
-    # Gradle专属扫描
+    # Gradle 扫描
     run_gradle_scan() {{
-        if [ ! -f "./gradlew" ]; then
-            echo "gradlew 文件不存在，尝试使用通用扫描..." >&2
-            run_general_scan
-            return
-        fi
-        
         echo "开始Gradle项目扫描..." >&2
         chmod +x ./gradlew
-        
-        # 先尝试编译项目
-        echo "步骤1: 编译项目..." >&2
-        timeout {scan_timeout} ./gradlew clean build -x test 2>&1 | tail -n 50 >&2
-        compile_exit_code=$?
-        
-        if [ $compile_exit_code -ne 0 ]; then
-            echo "Gradle编译失败（退出码: $compile_exit_code），尝试使用通用扫描..." >&2
+
+        # 检查项目是否配置了 sonarqube 插件
+        if ./gradlew tasks --all 2>/dev/null | grep -q "sonarqube"; then
+            echo "检测到 SonarQube 插件，使用 Gradle 原生扫描..." >&2
+            timeout {scan_timeout} ./gradlew sonarqube \\
+                -Dsonar.host.url="$sonar_url" \\
+                -Dsonar.token="{sonar_token}" \\
+                -Dsonar.projectKey="{sonar_project_name}" \\
+                -Dsonar.projectName="{sonar_project_name}" 2>&1 | tail -n 50 >&2
+            
+            scan_exit_code=$?
+            handle_scan_result "Gradle" $scan_exit_code "$sonar_url"
+        else
+            echo "项目未配置 SonarQube 插件，回退到通用扫描..." >&2
             run_general_scan
-            return
         fi
-        
-        echo "步骤2: 执行SonarQube扫描..." >&2
-        timeout {scan_timeout} ./gradlew sonarqube \\
-            -Dsonar.host.url="$sonar_url" \\
-            -Dsonar.token="{sonar_token}" \\
-            -Dsonar.projectKey="{sonar_project_name}" \\
-            -Dsonar.projectName="{sonar_project_name}" 2>&1 | tail -n 50 >&2
-        
-        scan_exit_code=$?
-        handle_scan_result "Gradle" $scan_exit_code "$sonar_url"
     }}
     
     PROJECT_TYPE=$(detect_project_type)

@@ -49,10 +49,43 @@ def sonar_checker(project_url: str, res_payload: dict, config: dict) -> None:
         
         if error is None:
             logger.info(f"sonar-scanner finish scanning project: {project_url}, report querying...")
-            sonar_result = _query_sonar_measures(sonar_project_name, sonar_config)
-            res_payload["scan_results"]["sonar-scanner"] = sonar_result
+            logger.info(f"SonarQube project name: {sonar_project_name}")
+            logger.info(f"SonarQube dashboard URL: http://{sonar_config['host']}:{sonar_config['port']}/dashboard?id={sonar_project_name}")
             
-            logger.info(f"sonar-scanner job done: {project_url}")
+            sonar_result = _query_sonar_measures(sonar_project_name, sonar_config)
+            
+            # 检查是否有度量数据
+            if sonar_result.get("component", {}).get("measures"):
+                logger.info(f"sonar-scanner job done with {len(sonar_result['component']['measures'])} metrics: {project_url}")
+                res_payload["scan_results"]["sonar-scanner"] = sonar_result
+            else:
+                logger.warning(f"sonar-scanner completed but no metrics found: {project_url}")
+                logger.warning(f"Check SonarQube dashboard: http://{sonar_config['host']}:{sonar_config['port']}/dashboard?id={sonar_project_name}")
+                
+                # 提供更详细的诊断信息
+                diagnostic_info = {
+                    "status": "no_metrics",
+                    "project_key": sonar_project_name,
+                    "dashboard_url": f"http://{sonar_config['host']}:{sonar_config['port']}/dashboard?id={sonar_project_name}",
+                    "possible_causes": [
+                        "Maven compilation may have failed silently",
+                        "No source files were found to analyze",
+                        "Java bytecode files (*.class) were not generated",
+                        "SonarQube quality gate configuration issue",
+                        "Multi-module project structure not properly handled"
+                    ],
+                    "suggestions": [
+                        "Check if 'mvn clean install' succeeded",
+                        "Verify target/classes directories exist",
+                        "Check SonarQube server logs",
+                        "Try running 'mvn sonar:sonar' manually with -X flag"
+                    ]
+                }
+                
+                if sonar_result.get("analysis_error"):
+                    diagnostic_info["analysis_error"] = sonar_result["analysis_error"]
+                
+                res_payload["scan_results"]["sonar-scanner"] = {**sonar_result, **diagnostic_info}
         else:
             logger.error(f"sonar-scanner job failed: {project_url}, error: {error}")
             res_payload["scan_results"]["sonar-scanner"] = {"error": error.decode("utf-8")}
@@ -134,6 +167,84 @@ def _create_sonar_project(project_name: str, sonar_config: dict) -> None:
         logger.error(f"Exception creating SonarQube project: {e}")
 
 
+def _get_analysis_logs(project_name: str, sonar_config: dict) -> dict:
+    """
+    Get analysis task logs to diagnose issues
+    
+    Args:
+        project_name: Project name
+        sonar_config: SonarQube configuration
+        
+    Returns:
+        dict: Analysis task information
+    """
+    try:
+        logger.info(f"Querying analysis task history for project: {project_name}")
+        ce_activity_url = f"http://{sonar_config['host']}:{sonar_config['port']}/api/ce/activity"
+        auth = (sonar_config.get("username"), sonar_config.get("password"))
+        
+        response = requests.get(
+            ce_activity_url,
+            auth=auth,
+            params={"component": project_name, "ps": 5},  # 获取最近5个任务
+            timeout=30
+        )
+        
+        logger.info(f"CE activity API response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            activity_data = json.loads(response.text)
+            tasks = activity_data.get("tasks", [])
+            
+            logger.info(f"Found {len(tasks)} analysis tasks in history")
+            
+            if tasks:
+                # 显示所有任务的状态
+                for i, task in enumerate(tasks[:3]):
+                    logger.info(f"Task {i+1}: status={task.get('status')}, type={task.get('type')}, submittedAt={task.get('submittedAt')}")
+                
+                latest_task = tasks[0]
+                task_id = latest_task.get("id")
+                status = latest_task.get("status")
+                task_type = latest_task.get("type")
+                
+                logger.info(f"Latest analysis task: id={task_id}, status={status}, type={task_type}")
+                
+                # 如果任务失败，获取错误信息
+                if status == "FAILED":
+                    error_msg = latest_task.get("errorMessage", "No error message available")
+                    logger.error(f"Analysis FAILED with error: {error_msg}")
+                    return {"status": status, "error": error_msg, "task": latest_task}
+                elif status == "SUCCESS":
+                    # 即使成功也可能没有生成度量数据
+                    warnings = latest_task.get("warnings", [])
+                    analysis_time_ms = latest_task.get("executionTimeMs", 0)
+                    logger.info(f"Analysis task succeeded in {analysis_time_ms}ms")
+                    
+                    if warnings:
+                        logger.warning(f"⚠️  Analysis succeeded with {len(warnings)} warnings: {warnings}")
+                    
+                    # 检查任务详情以获取更多信息
+                    has_errors_or_warnings = latest_task.get("hasErrorsOrWarnings", False)
+                    if has_errors_or_warnings:
+                        logger.warning("Task has errors or warnings flag set")
+                    
+                    return {"status": status, "warnings": warnings, "execution_time_ms": analysis_time_ms, "task": latest_task}
+                else:
+                    logger.warning(f"Unexpected task status: {status}")
+                    return {"status": status, "task": latest_task}
+            else:
+                logger.warning("No analysis tasks found in history")
+                return {"error": "No analysis tasks found"}
+        else:
+            logger.error(f"Failed to query CE activity: HTTP {response.status_code}")
+            return {"error": f"HTTP {response.status_code}"}
+        
+    except Exception as e:
+        logger.error(f"Exception while getting analysis logs: {e}", exc_info=True)
+        return {"error": str(e)}
+
+
 def _query_sonar_measures(project_name: str, sonar_config: dict) -> dict:
     """
     Query SonarQube project metrics
@@ -146,11 +257,54 @@ def _query_sonar_measures(project_name: str, sonar_config: dict) -> dict:
         dict: Query result
     """
     try:
-        logger.info("Waiting for SonarQube data processing...")
-        time.sleep(30)
+        logger.info("Waiting for SonarQube background task processing...")
+        
+        # 检查后台任务状态，最多等待120秒
+        max_wait_time = 120
+        check_interval = 10
+        elapsed_time = 0
+        
+        ce_task_url = f"http://{sonar_config['host']}:{sonar_config['port']}/api/ce/component"
+        auth = (sonar_config.get("username"), sonar_config.get("password"))
+        
+        while elapsed_time < max_wait_time:
+            time.sleep(check_interval)
+            elapsed_time += check_interval
+            
+            try:
+                response = requests.get(
+                    ce_task_url, 
+                    auth=auth, 
+                    params={"component": project_name},
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    task_data = json.loads(response.text)
+                    if task_data.get("queue", []):
+                        logger.info(f"Background tasks still in queue, waiting... ({elapsed_time}s)")
+                        continue
+                    
+                    current_task = task_data.get("current")
+                    if current_task and current_task.get("status") == "IN_PROGRESS":
+                        logger.info(f"Background task in progress, waiting... ({elapsed_time}s)")
+                        continue
+                    
+                    # 任务完成
+                    logger.info("Background task completed")
+                    break
+                else:
+                    logger.warning(f"Could not check task status: {response.status_code}, proceeding anyway...")
+                    break
+                    
+            except Exception as e:
+                logger.warning(f"Error checking task status: {e}, proceeding anyway...")
+                break
+        
+        # 额外等待10秒确保数据完全可用
+        time.sleep(10)
         
         measures_api_url = f"http://{sonar_config['host']}:{sonar_config['port']}/api/measures/component"
-        auth = (sonar_config.get("username"), sonar_config.get("password"))
         
         params = {
             "component": project_name, 
@@ -161,7 +315,20 @@ def _query_sonar_measures(project_name: str, sonar_config: dict) -> dict:
         
         if response.status_code == 200:
             logger.info("Querying sonar-scanner report success: 200")
-            return json.loads(response.text)
+            result = json.loads(response.text)
+            
+            # 如果没有度量数据，记录警告并查询分析日志
+            if not result.get("component", {}).get("measures"):
+                logger.warning(f"No measures data found for project: {project_name}")
+                logger.warning("This may indicate the analysis did not complete successfully")
+                
+                # 查询最近的分析任务详情
+                analysis_log = _get_analysis_logs(project_name, sonar_config)
+                if analysis_log:
+                    logger.error(f"Analysis task details: {analysis_log}")
+                    result["analysis_error"] = analysis_log
+            
+            return result
         else:
             logger.error(f"Querying sonar-scanner report failed with status code: {response.status_code}")
             return {"error": f"Query failed with status code: {response.status_code}"}
