@@ -61,7 +61,7 @@ RUN gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A170311380
     echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | tee /etc/apt/sources.list.d/sbt_old.list && \
     curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | apt-key add && \
     apt-get update && \
-    apt-get install -y openjdk-21-jdk openjdk-21-doc && \
+    apt-get install -y openjdk-17-jdk openjdk-17-doc && \
     # Install Maven
     apt-get install -y maven && \
     # Install Gradle
@@ -77,7 +77,7 @@ RUN gpg --keyserver keyserver.ubuntu.com --recv-keys 409B6B1796C275462A170311380
     node -v && npm -v && tsc -v && \
     mvn -v && \
     gradle -v && \
-    javadoc -version
+    javadoc --version
 
 # Install ohpm_cli_tool
 RUN cd /opt && git clone --depth=1 https://github.com/Laniakea2012/ohpm_cli_tool.git && \
