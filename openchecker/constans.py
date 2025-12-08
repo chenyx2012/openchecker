@@ -108,7 +108,7 @@ sonar_scanner_shell_script = """
             echo "✅ ${{scan_type}}扫描成功"
             echo "📈 查看结果: $sonar_url/dashboard?id={sonar_project_name}"
         elif [ $scan_result -eq 124 ]; then
-            echo "⏰ 扫描超时 ({scan_timeout}秒)" >&2
+            echo "⏰ 扫描超时 ({scan_timeout_s}秒)" >&2
             exit 1
         else
             echo "❌ ${{scan_type}}扫描失败 (退出码: $scan_result)" >&2
@@ -138,7 +138,7 @@ sonar_scanner_shell_script = """
         echo "SonarQube URL: $sonar_url" >&2
         echo "项目名称: {sonar_project_name}" >&2
         
-        timeout {scan_timeout} sonar-scanner \\
+        timeout {scan_timeout_s} sonar-scanner \\
             -Dsonar.host.url="$sonar_url" \\
             -Dsonar.token="{sonar_token}" \\
             -Dsonar.projectKey="{sonar_project_name}" \\
@@ -158,7 +158,7 @@ sonar_scanner_shell_script = """
     run_maven_scan() {{
         echo "开始Maven项目扫描..." >&2
 
-        timeout {scan_timeout} mvn clean verify sonar:sonar \\
+        timeout {scan_timeout_s} mvn clean verify sonar:sonar \\
             -Dsonar.host.url="$sonar_url" \\
             -Dsonar.token="{sonar_token}" \\
             -Dsonar.projectKey="{sonar_project_name}" \\
@@ -177,7 +177,7 @@ sonar_scanner_shell_script = """
         # 检查项目是否配置了 sonarqube 插件
         if ./gradlew tasks --all 2>/dev/null | grep -q "sonarqube"; then
             echo "检测到 SonarQube 插件，使用 Gradle 原生扫描..." >&2
-            timeout {scan_timeout} ./gradlew sonarqube \\
+            timeout {scan_timeout_s} ./gradlew sonarqube \\
                 -Dsonar.host.url="$sonar_url" \\
                 -Dsonar.token="{sonar_token}" \\
                 -Dsonar.projectKey="{sonar_project_name}" \\

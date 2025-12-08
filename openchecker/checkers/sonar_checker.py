@@ -43,7 +43,7 @@ def sonar_checker(project_url: str, res_payload: dict, config: dict) -> None:
             sonar_host=sonar_config.get('host', 'localhost'),
             sonar_port=sonar_config.get('port', '9000'),
             sonar_token=sonar_config.get('token', ''),
-            scan_timeout=sonar_config.get('scan_timeout', '1800')
+            scan_timeout_s=sonar_config.get('scan_timeout_s', '1800')
         )
         result, error = shell_exec(shell_script)
         
@@ -259,17 +259,17 @@ def _query_sonar_measures(project_name: str, sonar_config: dict) -> dict:
     try:
         logger.info("Waiting for SonarQube background task processing...")
         
-        # 检查后台任务状态，最多等待120秒
-        max_wait_time = 120
-        check_interval = 10
+        # 从配置文件读取等待时间和检查间隔
+        report_max_wait_time_s = int(sonar_config.get("report_max_wait_time_s", 120))
+        report_check_interval_s = int(sonar_config.get("report_check_interval_s", 10))
         elapsed_time = 0
         
         ce_task_url = f"http://{sonar_config['host']}:{sonar_config['port']}/api/ce/component"
         auth = (sonar_config.get("username"), sonar_config.get("password"))
         
-        while elapsed_time < max_wait_time:
-            time.sleep(check_interval)
-            elapsed_time += check_interval
+        while elapsed_time < report_max_wait_time_s:
+            time.sleep(report_check_interval_s)
+            elapsed_time += report_check_interval_s
             
             try:
                 response = requests.get(
