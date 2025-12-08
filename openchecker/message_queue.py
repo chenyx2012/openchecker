@@ -3,6 +3,43 @@ from helper import read_config
 import time
 import threading
 from logger import get_logger
+import functools
+from concurrent.futures import ThreadPoolExecutor
+
+
+class ThreadSafeChannel:
+    """
+    Thread-safe Channel wrapper.
+    Intercepts basic_ack and basic_nack calls, using connection.add_callback_threadsafe() to ensure thread safety.
+    """
+    def __init__(self, channel, connection):
+        self._channel = channel
+        self._connection = connection
+    
+    def basic_ack(self, delivery_tag, multiple=False):
+        """Thread-safe message acknowledgment"""
+        cb = functools.partial(
+            self._channel.basic_ack,
+            delivery_tag=delivery_tag,
+            multiple=multiple
+        )
+        self._connection.add_callback_threadsafe(cb)
+        logger.debug(f"Scheduled ACK for delivery_tag: {delivery_tag}")
+    
+    def basic_nack(self, delivery_tag, multiple=False, requeue=True):
+        """Thread-safe message rejection"""
+        cb = functools.partial(
+            self._channel.basic_nack,
+            delivery_tag=delivery_tag,
+            multiple=multiple,
+            requeue=requeue
+        )
+        self._connection.add_callback_threadsafe(cb)
+        logger.debug(f"Scheduled NACK for delivery_tag: {delivery_tag}, requeue: {requeue}")
+    
+    def __getattr__(self, name):
+        """Proxy other methods to the original channel"""
+        return getattr(self._channel, name)
 
 # Get logger for message queue module
 logger = get_logger('openchecker.queue')
@@ -45,82 +82,111 @@ def publish_message(config, queue_name, message_body):
         return str(e)
 
 def consumer(config, queue_name, callback_func):
+    """
+    Consumer function that supports long-running tasks while maintaining heartbeat.
+    
+    Solution:
+    1. Use thread pool to execute actual time-consuming tasks (callback_func)
+    2. Main thread sends heartbeat periodically via connection.process_data_events()
+    3. Use connection.add_callback_threadsafe() to ensure thread-safe message acknowledgment
+    """
     credentials = pika.PlainCredentials(config['username'], config['password'])
-    parameters = pika.ConnectionParameters(config['host'], int(config['port']), '/', credentials, heartbeat=int(config['heartbeat_interval_s']), blocked_connection_timeout=int(config['blocked_connection_timeout_ms']))
+    parameters = pika.ConnectionParameters(
+        config['host'], 
+        int(config['port']), 
+        '/', 
+        credentials, 
+        heartbeat=int(config['heartbeat_interval_s']), 
+        blocked_connection_timeout=int(config['blocked_connection_timeout_ms'])
+    )
+    
+    # Create thread pool for executing time-consuming tasks
+    executor = ThreadPoolExecutor(max_workers=1)
 
-    # Heartbeat thread control flag
-    heartbeat_running = False
-
-    def heartbeat_sender(connection):
-        """Independent heartbeat sending thread"""
-        nonlocal heartbeat_running
-        heartbeat_running = True
-        try:
-            while heartbeat_running:
+    def create_threaded_callback_wrapper(connection, channel):
+        """Create a thread-safe callback wrapper"""
+        # Create a thread-safe channel wrapper
+        thread_safe_channel = ThreadSafeChannel(channel, connection)
+        
+        def threaded_callback_wrapper(ch, method, properties, body):
+            """
+            Wrapper callback function that executes actual tasks in thread pool.
+            Passes thread-safe channel wrapper to ensure ACK/NACK operations are thread-safe.
+            """
+            def do_work():
                 try:
-                    # Keep heartbeat with processing events
-                    if connection and connection.is_open:
-                        connection.process_data_events()
+                    # Pass thread-safe channel instead of original channel
+                    callback_func(thread_safe_channel, method, properties, body)
                 except Exception as e:
-                    logger.error(f"Heartbeat error: {e}")
-                time.sleep(max(1, int(config['heartbeat_interval_s']) // 2))
-        finally:
-            heartbeat_running = False
+                    logger.error(f"Error in callback execution: {e}", exc_info=True)
+                    # When exception occurs, use thread-safe way to NACK message
+                    try:
+                        thread_safe_channel.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                        logger.warning(f"Message NACKed due to error: {method.delivery_tag}")
+                    except Exception as nack_error:
+                        logger.error(f"Failed to NACK message: {nack_error}")
+            
+            # Submit task to thread pool
+            executor.submit(do_work)
+            logger.debug(f"Task queued for delivery_tag: {method.delivery_tag}")
+        
+        return threaded_callback_wrapper
 
     while True:
-        heartbeat_thread = None
         connection = None
         try:
             connection = pika.BlockingConnection(parameters)
             channel = connection.channel()
             channel.basic_qos(prefetch_count=1)
 
-            # Start heartbeat thread
-            heartbeat_thread = threading.Thread(
-                target=heartbeat_sender,
-                args=(connection,),
-                daemon=True
-            )
-            heartbeat_thread.start()
-
-            channel.basic_consume(queue=queue_name, on_message_callback=callback_func, auto_ack=False)
+            # Create wrapped callback for current connection and channel
+            wrapped_callback = create_threaded_callback_wrapper(connection, channel)
+            channel.basic_consume(queue=queue_name, on_message_callback=wrapped_callback, auto_ack=False)
             logger.info('Consumer connected, waiting for messages...')
-            channel.start_consuming()
+            logger.info('Task execution mode: Serial (prefetch_count=1, max_workers=1, manual ACK)')
+            
+            # Periodically call process_data_events to handle heartbeat and message reception
+            # This ensures heartbeat is sent normally even when callback executes for long time in worker thread
+            while connection.is_open:
+                connection.process_data_events(time_limit=1)  # Process events once per second
 
         except pika.exceptions.ConnectionClosedByBroker as e:
-            logger.error(f"Agent closed connection: {e}")
-            logger.info("Retrying...")
-            if heartbeat_thread:
-                heartbeat_running = False
-                heartbeat_thread.join(timeout=2)
+            logger.error(f"Broker closed connection: {e}")
+            logger.info("Retrying in 60 seconds...")
             time.sleep(60)
             continue
 
         except pika.exceptions.AMQPChannelError as e:
             logger.error(f"AMQP channel error: {e}")
-            logger.info("Retrying...")
-            if heartbeat_thread:
-                heartbeat_running = False
-                heartbeat_thread.join(timeout=2)
+            logger.info("Retrying in 60 seconds...")
             time.sleep(60)
             continue
 
+        except pika.exceptions.AMQPConnectionError as e:
+            logger.error(f"AMQP connection error: {e}")
+            logger.info("Retrying in 60 seconds...")
+            time.sleep(60)
+            continue
+
+        except KeyboardInterrupt:
+            logger.info("Received keyboard interrupt, shutting down...")
+            break
+
         except Exception as e:
-            logger.error(f"Consumer failed: {e}")
-            if heartbeat_thread:
-                heartbeat_running = False
-                heartbeat_thread.join(timeout=2)
-            if connection and connection.is_open:
-                connection.close()
-            return str(e)
+            logger.error(f"Consumer failed: {e}", exc_info=True)
+            logger.info("Retrying in 60 seconds...")
+            time.sleep(60)
+            continue
 
         finally:
-            # Ensure the heartbeat thread stops
-            if heartbeat_thread:
-                heartbeat_running = False
-                heartbeat_thread.join(timeout=2)
             if connection and connection.is_open:
-                connection.close()
+                try:
+                    connection.close()
+                except Exception as e:
+                    logger.error(f"Error closing connection: {e}")
+    
+    # Shutdown thread pool
+    executor.shutdown(wait=True)
 
 def check_queue_status(config, queue_name):
     credentials = pika.PlainCredentials(config['username'], config['password'])
