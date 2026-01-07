@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import re
 import requests
 from typing import Dict, Tuple
 from constans import shell_script_handlers
@@ -9,6 +10,52 @@ from platform_adapter import platform_manager
 from logger import get_logger
 
 logger = get_logger('openchecker.checkers.sonar_checker')
+
+
+def _build_sonar_url(sonar_config: dict, path: str) -> str:
+    """
+    Build SonarQube API URL
+    Matches the logic in shell script (constans.py):
+    - If host already contains protocol (http:// or https://), use it directly
+    - If host is an IP address, use http://IP:port
+    - If host is a domain name, use https://domain (443 is default HTTPS port)
+    
+    Args:
+        sonar_config: SonarQube configuration
+        path: API path (e.g., '/api/projects/create')
+    
+    Returns:
+        Complete URL
+    """
+    host = sonar_config.get('host', 'localhost')
+    port = sonar_config.get('port', '9000')
+    
+    # Check if host already contains protocol
+    if host.startswith('http://') or host.startswith('https://'):
+        # Host already has protocol, use it directly
+        base_url = host
+    else:
+        # Check if it's an IP address
+        ip_pattern = re.compile(r'^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$')
+        if ip_pattern.match(host):
+            # It's an IP address, use http protocol and add port
+            if port and str(port) != 'None':
+                base_url = f"http://{host}:{port}"
+            else:
+                base_url = f"http://{host}"
+        else:
+            # It's a domain name, use https protocol
+            # For standard HTTPS port 443, no need to add port explicitly
+            if str(port) == '443':
+                base_url = f"https://{host}"
+            else:
+                base_url = f"https://{host}:{port}"
+    
+    # Ensure path starts with /
+    if not path.startswith('/'):
+        path = f"/{path}"
+    
+    return f"{base_url}{path}"
 
 
 def sonar_checker(project_url: str, res_payload: dict, config: dict) -> None:
@@ -107,7 +154,7 @@ def _check_sonar_project_exists(project_name: str, sonar_config: dict) -> bool:
         bool: Whether project exists
     """
     try:
-        search_api_url = f"http://{sonar_config['host']}:{sonar_config['port']}/api/projects/search"
+        search_api_url = _build_sonar_url(sonar_config, '/api/projects/search')
         auth = (sonar_config.get("username"), sonar_config.get("password"))
         
         response = requests.get(
@@ -145,7 +192,7 @@ def _create_sonar_project(project_name: str, sonar_config: dict) -> None:
         sonar_config: SonarQube configuration
     """
     try:
-        create_api_url = f"http://{sonar_config['host']}:{sonar_config['port']}/api/projects/create"
+        create_api_url = _build_sonar_url(sonar_config, '/api/projects/create')
         auth = (sonar_config.get("username"), sonar_config.get("password"))
         
         payload = {
@@ -264,7 +311,7 @@ def _query_sonar_measures(project_name: str, sonar_config: dict) -> dict:
         report_check_interval_s = int(sonar_config.get("report_check_interval_s", 10))
         elapsed_time = 0
         
-        ce_task_url = f"http://{sonar_config['host']}:{sonar_config['port']}/api/ce/component"
+        ce_task_url = _build_sonar_url(sonar_config, '/api/ce/component')
         auth = (sonar_config.get("username"), sonar_config.get("password"))
         
         while elapsed_time < report_max_wait_time_s:
@@ -304,7 +351,7 @@ def _query_sonar_measures(project_name: str, sonar_config: dict) -> dict:
         # 额外等待10秒确保数据完全可用
         time.sleep(10)
         
-        measures_api_url = f"http://{sonar_config['host']}:{sonar_config['port']}/api/measures/component"
+        measures_api_url = _build_sonar_url(sonar_config, '/api/measures/component')
         
         params = {
             "component": project_name, 
