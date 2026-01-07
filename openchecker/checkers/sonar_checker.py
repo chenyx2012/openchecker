@@ -78,7 +78,7 @@ def sonar_checker(project_url: str, res_payload: dict, config: dict) -> None:
         except ValueError:
             platform, organization, project = "other", "default", "default"
         
-        sonar_project_name = f"{platform}_{organization}_{project}"
+        sonar_project_name = f"{platform}_{organization}_{project}".lower()
         sonar_config = config.get("SonarQube", {})
         
         if not _check_sonar_project_exists(sonar_project_name, sonar_config):
