@@ -16,10 +16,10 @@ class DefaultRequest:
     
     def set_method(self, method: str):
         if not method:
-            raise ValueError("method cannot be empty")
+            raise Warning("method cannot be empty")
         http_methods = method.upper()
         if http_methods not in ["GET", "POST", "PUT", "DELETE"]:
-            raise ValueError("method must be one of GET, POST, PUT, DELETE")
+            raise Warning("method must be one of GET, POST, PUT, DELETE")
         self.method = http_methods
     
     def get_method(self) -> str:
@@ -27,7 +27,7 @@ class DefaultRequest:
 
     def add_header(self, name: str, value: str):
         if not name:
-            raise ValueError("header name cannot be empty")
+            raise Warning("header name cannot be empty")
         self.headers[name.lower()] = value
     
     def get_headers(self) -> dict:
@@ -44,18 +44,18 @@ class DefaultRequest:
 
     def set_url(self, url: str):
         if not url or not url.strip():
-            raise ValueError("url cannot be empty")
+            raise Warning("url cannot be empty")
         self.path = url
         if '?' in url:
-            query_string = url.split('?', 1)
-            for param in query_string.split('&'):
-                if '=' in param:
+            query_list = url.split('?', 1)
+            for param in query_list:
+                if '=' in param.split('&'):
                     key, value = param.split('=', 1)
                     self.query_params[quote(unquote(key))] = quote(unquote(value))
 
     def add_query_param(self, key: str, value: str):
         if not key or not key.strip():
-            raise ValueError("query parameter name cannot be empty")
+            raise Warning("query parameter name cannot be empty")
         self.query_params[quote(key)] = quote(value)
     
     def get_query_params(self) -> dict:

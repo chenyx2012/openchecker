@@ -228,8 +228,12 @@ def get_ohpm_info(project_url: str) -> Tuple[Dict, str]:
         secret_key = config["AKSK"].get("secret_key", "")
         project_url = project_url.replace('.git', '')
         path = '/ohpm/m2m/package/info'
-        body = "{\"repoAddress\":\"" + project_url + "\", \"packageName\":\"\",\"metaDataVersion\":\"v2\"}"
-        timestamp = str(int(int(time.time()) * 1000))
+        body = json.dumps({
+            "repoAddress": project_url,
+            "packageName": "",
+            "metaDataVersion": "v2"
+        })
+        timestamp = str(int(time.time() * 1000))
         # create signed request
         req = DefaultRequest(access_key, secret_key)
         req.set_method("POST")

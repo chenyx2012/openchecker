@@ -2,7 +2,9 @@ import hashlib
 import hmac
 import time
 from urllib.parse import quote
+from logger import get_logger
 
+logger = get_logger('openchecker.aksk.signer')
 
 class Signer:
     @staticmethod
@@ -15,7 +17,8 @@ class Signer:
             sign_value = Signer.sign_key(canonical_request, request.get_secret_key())
             return Signer.build_authorization_header(request, timestamp, signed_headers, sign_value)
         except Exception as e:
-            raise ValueError(f"Error during signing process: {e}")
+            logger.error(f"Error during signing process: {e}")
+            return None
     
     @staticmethod
     def get_timestamp(authorization):
@@ -25,7 +28,8 @@ class Signer:
         try:
             return int(timestamp)
         except ValueError:
-            raise ValueError("Invalid timestamp format in authorization header")
+            logger.error("Invalid timestamp format in authorization header")
+            return None
     
     @staticmethod
     def get_access_id(authorization):
@@ -49,18 +53,18 @@ class Signer:
 
     @staticmethod
     def get_contain_path(authorization):
-        contain_path = Signer.get_authorization_field(authorization, "containPath=")
-        return True if not contain_path else bool(contain_path)
+        is_contain_path = Signer.get_authorization_field(authorization, "containPath=")
+        return True if not is_contain_path else is_contain_path.lower() == "true"
 
     @staticmethod
     def get_contain_body(authorization):
-        contain_body = Signer.get_authorization_field(authorization, "containBody=")
-        return True if not contain_body else bool(contain_body)
-    
+        is_contain_body = Signer.get_authorization_field(authorization, "containBody=")
+        return True if not is_contain_body else is_contain_body.lower() == "true"
+
     @staticmethod
     def get_contain_query(authorization):
-        contain_query = Signer.get_authorization_field(authorization, "containQuery=")
-        return True if not contain_query else bool(contain_query)
+        is_contain_query = Signer.get_authorization_field(authorization, "containQuery=")
+        return True if not is_contain_query else is_contain_query.lower() == "true"
 
     @staticmethod
     def calculate_body_hash(request):
@@ -147,12 +151,12 @@ class Signer:
     @staticmethod
     def get_authorization_field(authorization, field_name):
         if not authorization or not authorization.strip():
-            raise ValueError("The authorization is error")
+            raise Warning("The authorization is error")
         pos = authorization.find(field_name)
         if pos == -1:
             return ""
         result = authorization[pos + len(field_name):]
         pos = result.find(",")
-        if pos != -1:
+        if pos == -1:
             return ""
         return result[:pos]
